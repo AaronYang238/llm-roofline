@@ -1,0 +1,225 @@
+# -*- coding: utf-8 -*-
+"""将各家族 config.json 归一化为统一的架构描述 (arch record)。
+
+归一化后的字段:
+  h, L, H, KVH, d, V, tie, I
+MoE 模型附加:
+  moe = {"E", "K", "Ie", "shared_n", "Is", "first_dense"}
+MLA 模型附加:
+  mla = {"q_lora", "kv_lora", "rope_d", "nope_d", "v_d"}
+混合注意力模型 (Qwen3.5/3.8, Kimi-K3, GLM-5.3-Flash) 附加:
+  hybrid = {"L_full", "state_elems"}
+DSA 稀疏注意力模型 (DeepSeek-V4, GLM-5.3) 附加:
+  dsa = {"topk"}
+"""
+from __future__ import annotations
+
+import json
+
+
+def _first(d, keys, default=None):
+    for k in keys:
+        v = d.get(k)
+        if v is not None:
+            return v
+    return default
+
+
+def normalize(
+    cfg: dict,
+    name: str,
+    family: str,
+    note: str = "",
+    repo_used: str | None = None,
+) -> dict:
+    cfg = _unwrap(cfg)
+    h = cfg["hidden_size"]
+    L = _first(cfg, ["num_hidden_layers", "n_layers", "num_layers"])
+    H = _first(cfg, ["num_attention_heads", "n_heads"])
+    KVH = _first(cfg, ["num_key_value_heads", "num_kv_heads"])
+    if KVH is None and cfg.get("multi_query_attention"):
+        KVH = cfg.get("multi_query_group_num")
+    if KVH is None:
+        KVH = H
+    V = _first(cfg, ["vocab_size", "padded_vocab_size"])
+    tie = bool(cfg.get("tie_word_embeddings", False))
+    d = _first(cfg, ["head_dim", "kv_channels"])
+    if d is None:
+        if H and h % H == 0:
+            d = h // H
+        elif H:
+            d = 256 if (h * 256) % H == 0 else h / H
+        else:
+            d = None
+
+    # ---------- MLA (多级潜注意力) ----------
+    mla = None
+    if cfg.get("kv_lora_rank"):
+        mla = {
+            "q_lora": _first(cfg, ["q_lora_rank"], 1536),
+            "kv_lora": cfg["kv_lora_rank"],
+            "rope_d": _first(cfg, ["qk_rope_head_dim"], 64),
+            "nope_d": _first(cfg, ["qk_nope_head_dim"], 128),
+            "v_d": _first(cfg, ["v_head_dim"], 128),
+        }
+
+    # ---------- MoE ----------
+    moe = None
+    E = _first(cfg, ["num_experts", "num_local_experts", "n_routed_experts"])
+    if E:
+        K = _first(
+            cfg,
+            ["num_experts_per_tok", "experts_per_tok", "num_selected_experts", "top_k"],
+            2,
+        )
+        Ie = _first(cfg, ["moe_intermediate_size", "intermediate_size"])
+        shared_n = _first(cfg, ["n_shared_experts", "num_shared_experts"], 0)
+        Is = _first(cfg, ["moe_intermediate_size", "intermediate_size"])
+        first_dense = _first(cfg, ["first_k_dense_replace"], 0)
+        moe = {
+            "E": E,
+            "K": K,
+            "Ie": Ie,
+            "shared_n": shared_n,
+            "Is": Is,
+            "first_dense": first_dense,
+        }
+
+    # ---------- 混合线性注意力 (GDN / KDA) ----------
+    # 部分层是线性注意力 (固定大小循环状态), 只有注意力层累积 KV 缓存
+    hybrid = None
+    layer_types = cfg.get("layer_types")
+    lac = cfg.get("linear_attn_config")
+    if isinstance(layer_types, list) and layer_types:
+        # Qwen3.5/3.6/3.8, Holo3: layer_types + linear_* 字段 (GDN)
+        full = sum(1 for t in layer_types if t != "linear_attention")
+        if full < len(layer_types):  # 存在线性注意力层
+            nvkh = _first(cfg, ["linear_num_value_heads"], 32)
+            kdim = _first(cfg, ["linear_key_head_dim"], 128)
+            vdim = _first(cfg, ["linear_value_head_dim"], 128)
+            hybrid = {"L_full": full, "state_elems": nvkh * kdim * vdim}
+    elif isinstance(lac, dict) and lac:
+        # Kimi-K3 / GLM-5.3-Flash: linear_attn_config 带 kda_layers (KDA)
+        full_layers = lac.get("full_attn_layers")
+        if full_layers is not None:
+            state = lac.get("num_heads", 64) * (lac.get("head_dim", 128) ** 2)
+            hybrid = {"L_full": len(full_layers), "state_elems": state}
+
+    # ---------- DSA 稀疏注意力 ----------
+    # indexer 每步只选 topk 个 token 的 KV 参与注意力
+    dsa = None
+    if cfg.get("index_topk"):
+        dsa = {"topk": cfg["index_topk"]}
+
+    # dense MLP 维度: 常规字段 -> ChatGLM 系 ffn_hidden_size
+    I = _first(cfg, ["intermediate_size", "ffn_hidden_size"])
+    if I is None and moe:
+        I = moe["Ie"]
+
+    return {
+        "name": name,
+        "family": family,
+        "note": note,
+        "repo": repo_used,
+        "h": h,
+        "L": L,
+        "H": H,
+        "KVH": KVH,
+        "d": d,
+        "V": V,
+        "tie": tie,
+        "I": I,
+        "moe": moe,
+        "mla": mla,
+        "hybrid": hybrid,
+        "dsa": dsa,
+    }
+
+
+def _unwrap(cfg: dict) -> dict:
+    """多模态 config 把语言模型参数嵌套在 text_config, 统一解包。"""
+    tc = cfg.get("text_config")
+    if isinstance(tc, str):
+        try:
+            tc = json.loads(tc)
+        except Exception:
+            tc = None
+    if tc and isinstance(tc, dict):
+        merged = dict(cfg)
+        merged.update(tc)
+        return merged
+    return cfg
+
+
+def layer_groups(A: dict) -> dict:
+    """按 MLP 类型分桶: dense-MLP 层 (如 DeepSeek 前 3 层) 与 MoE 层。"""
+    L = A["L"]
+    if A["moe"]:
+        fd = A["moe"]["first_dense"]
+        return {"dense": fd, "moe": L - fd}
+    return {"dense": L, "moe": 0}
+
+
+def param_counts(A: dict) -> dict:
+    """计算参数量 (与模型卡公布的 B 数对齐, 用于 sanity check)。"""
+    h, L, H, KVH, V = A["h"], A["L"], A["H"], A["KVH"], A["V"]
+    moe = A["moe"]
+    mla = A["mla"]
+    lg = layer_groups(A)
+
+    # ---- attention projections ----
+    if mla:
+        m = mla
+        qkv_params = (
+            h * m["q_lora"]
+            + m["q_lora"] * H * (m["nope_d"] + m["rope_d"])
+            + h * (m["kv_lora"] + m["rope_d"])
+            + m["kv_lora"] * H * (m["nope_d"] + m["v_d"])
+        )
+        o_params = H * m["v_d"] * h
+    else:
+        qkv_params = h * (H + 2 * KVH) * A["d"]
+        o_params = h * H * A["d"]
+
+    # ---- MLP: dense layers ----
+    dense_mlp_params = 3 * h * A["I"] if A["I"] else 0
+    dense_total = lg["dense"] * (qkv_params + o_params + dense_mlp_params)
+    dense_active = dense_total
+
+    # ---- MLP: MoE layers ----
+    if moe:
+        routed_params = moe["E"] * 3 * h * moe["Ie"]
+        shared_params = moe["shared_n"] * 3 * h * moe["Is"]
+        router_params = h * moe["E"]
+        moe_total = lg["moe"] * (
+            qkv_params + o_params + routed_params + shared_params + router_params
+        )
+        moe_active = lg["moe"] * (
+            qkv_params
+            + o_params
+            + moe["K"] * 3 * h * moe["Ie"]
+            + shared_params
+            + router_params
+        )
+        total = dense_total + moe_total
+        active = dense_active + moe_active
+    else:
+        total = L * (qkv_params + o_params + dense_mlp_params)
+        active = total
+
+    # ---- embedding & LM head ----
+    embed_params = h * V
+    head_params = h * V
+    total += embed_params
+    active += embed_params
+    if not A["tie"]:
+        total += head_params
+
+    return {
+        "total": total,
+        "active": active,
+        "qkv_params": qkv_params,
+        "o_params": o_params,
+        "dense_mlp_params": dense_mlp_params,
+        "router_params": (h * moe["E"]) if moe else 0,
+    }

@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>大模型推理算力强度 (FLOP/B) 分析 · Roofline</title>
+<style>
+:root{
+  --bg:#f6f7f9; --card:#ffffff; --ink:#1f2937; --muted:#6b7280;
+  --line:#e5e7eb; --brand:#2563eb; --brand-ink:#1d4ed8;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--bg);color:var(--ink);font-size:14px;line-height:1.6;
+}
+.wrap{max-width:1280px;margin:0 auto;padding:0 20px;}
+header{
+  background:#0f172a;color:#fff;padding:18px 0 0;position:sticky;top:0;z-index:50;
+  box-shadow:0 1px 6px rgba(0,0,0,.18);
+}
+.header-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+h1{font-size:19px;margin:0;font-weight:600;}
+h1 .sub{font-size:12px;color:#94a3b8;font-weight:400;margin-left:8px;}
+#tabs{display:flex;gap:2px;}
+#tabs button{
+  background:transparent;color:#94a3b8;border:none;padding:10px 16px;font-size:14px;
+  cursor:pointer;border-bottom:2px solid transparent;
+}
+#tabs button.active{color:#fff;border-bottom-color:var(--brand);}
+#tabs button:hover{color:#e2e8f0;}
+main{padding:24px 0 40px;}
+.tab{display:none;}
+.tab.active{display:block;}
+h2{font-size:16px;margin:22px 0 10px;font-weight:600;}
+h3{font-size:14px;margin:16px 0 8px;font-weight:600;}
+p{margin:8px 0;}
+.muted{color:var(--muted);}
+.small{font-size:12px;}
+.card{
+  background:var(--card);border:1px solid var(--line);border-radius:10px;
+  padding:16px 18px;margin:14px 0;
+}
+.kpis{display:flex;gap:12px;flex-wrap:wrap;margin:14px 0;}
+.kpi{
+  flex:1;min-width:150px;background:var(--card);border:1px solid var(--line);
+  border-radius:10px;padding:12px 16px;
+}
+.kpi .v{font-size:22px;font-weight:700;color:var(--brand-ink);}
+.kpi .l{font-size:12px;color:var(--muted);}
+.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0;}
+.controls label{font-size:12px;color:var(--muted);}
+select,button.btn,input.num{
+  font-size:13px;padding:5px 10px;border:1px solid var(--line);border-radius:7px;
+  background:#fff;color:var(--ink);cursor:pointer;
+}
+input.num{cursor:text;width:90px;}
+input.num:focus,select:focus{outline:2px solid #bfdbfe;}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;}
+.seg button{
+  border:none;background:transparent;padding:6px 14px;font-size:13px;cursor:pointer;color:var(--muted);
+}
+.seg button.active{background:var(--brand);color:#fff;}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:#fff;}
+table{border-collapse:collapse;width:100%;font-size:12.5px;}
+th,td{padding:6px 10px;text-align:right;border-bottom:1px solid #eef0f3;white-space:nowrap;}
+th{background:#f1f5f9;font-weight:600;color:#334155;position:sticky;top:0;z-index:5;}
+td.rowhead,th.rowhead{text-align:left;position:sticky;left:0;background:#fff;z-index:4;}
+th.rowhead{background:#f1f5f9;z-index:6;}
+td.total,th.total{border-left:2px solid var(--line);font-weight:600;}
+.mname{font-weight:600;}
+.msub{font-size:10.5px;color:var(--muted);}
+tr:hover td{filter:brightness(0.96);}
+.legend{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:12px;color:var(--muted);}
+.legend .bar{width:220px;height:10px;border-radius:5px;
+  background:linear-gradient(90deg,hsl(222,45%,96%),hsl(222,50%,90%),hsl(200,55%,85%),hsl(160,55%,80%),hsl(90,55%,75%),hsl(50,60%,72%),hsl(25,65%,70%),hsl(8,70%,68%),hsl(0,72%,66%));}
+.stagelegend{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0;font-size:12px;}
+.stagelegend .chip{display:inline-flex;align-items:center;gap:5px;}
+.stagelegend .dot{width:10px;height:10px;border-radius:50%;}
+svg.chart{width:100%;height:auto;background:#fff;border:1px solid var(--line);border-radius:10px;}
+.chartwrap{position:relative;}
+.methodtable td{text-align:left;}
+code{background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:12px;}
+.formula{font-family:ui-monospace,Consolas,monospace;font-size:12px;background:#f8fafc;
+  border:1px solid var(--line);border-radius:6px;padding:8px 12px;margin:6px 0;overflow-x:auto;}
+footer{padding:18px 0 30px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);margin-top:30px;}
+a{color:var(--brand-ink);text-decoration:none;}
+a:hover{text-decoration:underline;}
+
+/* ---------- 输入区 ---------- */
+#input-panel{
+  background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);
+  border-radius:12px;padding:18px 22px;margin:0 0 18px;color:#e2e8f0;
+  box-shadow:0 4px 14px rgba(15,23,42,.25);
+}
+#input-panel h2{color:#fff;margin:0 0 4px;font-size:16px;}
+#input-panel .hint{font-size:12px;color:#94a3b8;margin:0 0 14px;}
+.ip-row{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end;}
+.ip-field{display:flex;flex-direction:column;gap:4px;}
+.ip-field label{font-size:11px;color:#94a3b8;letter-spacing:.02em;}
+#input-panel input.num{
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);color:#fff;
+  font-size:14px;font-weight:600;padding:7px 10px;border-radius:8px;width:110px;
+}
+#input-panel input.num:focus{outline:2px solid #3b82f6;background:rgba(255,255,255,.14);}
+#input-panel input.num:invalid{border-color:#f87171;}
+#input-panel .seg{border-color:rgba(255,255,255,.18);}
+#input-panel .seg button{color:#94a3b8;background:transparent;}
+#input-panel .seg button.active{background:#3b82f6;color:#fff;}
+#input-panel select{
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);color:#fff;
+  font-size:13px;font-weight:600;padding:7px 10px;border-radius:8px;width:130px;
+}
+#input-panel select option{color:#1f2937;background:#fff;}
+.ip-summary{
+  margin-top:14px;padding:10px 14px;background:rgba(59,130,246,.12);
+  border:1px solid rgba(59,130,246,.3);border-radius:8px;font-size:13px;
+}
+.ip-summary b{color:#93c5fd;}
+.ip-reset{
+  background:transparent;border:1px solid rgba(255,255,255,.25);color:#cbd5e1;
+  padding:7px 14px;border-radius:8px;font-size:12px;cursor:pointer;
+}
+.ip-reset:hover{background:rgba(255,255,255,.1);}
+.unit{font-size:11px;color:#64748b;}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap header-row">
+    <h1>大模型推理算力强度分析<span class="sub">FLOP/B · Roofline 视角 · 数据源 ModelScope</span></h1>
+    <nav id="tabs">
+      <button data-tab="overview" class="active">总览矩阵</button>
+      <button data-tab="curves">强度曲线</button>
+      <button data-tab="roofline">Roofline 图</button>
+      <button data-tab="arch">架构总表</button>
+      <button data-tab="method">方法论</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ============================================================ -->
+<!-- 输入区: 所有视图共享的推理场景参数                             -->
+<!-- ============================================================ -->
+<section id="input-panel">
+  <h2>输入区 · 推理场景配置</h2>
+  <p class="hint">所有图表根据这里的参数实时计算。Prefill（预填充）处理整段提示词，是 GEMM 密集计算；
+  Decode（解码）逐 token 生成，每步需读全部 KV 缓存，两者算力强度相差 2–3 个数量级。</p>
+
+  <div class="ip-row">
+    <div class="ip-field">
+      <label>推理阶段</label>
+      <div class="seg" id="phase-seg">
+        <button data-phase="prefill">Prefill 预填充</button>
+        <button data-phase="decode" class="active">Decode 解码</button>
+      </div>
+    </div>
+
+    <!-- prefill 输入 -->
+    <div class="ip-field" id="prefill-inputs">
+      <label>Prefill 序列长度 S <span class="unit">(tokens)</span></label>
+      <input type="number" class="num" id="prefill-s" min="1" max="1000000" step="1" value="2048">
+    </div>
+
+    <!-- decode 输入 -->
+    <div class="ip-field" id="decode-inputs" style="display:none;">
+      <label>Decode 批量 B <span class="unit">(sequences)</span></label>
+      <input type="number" class="num" id="decode-b" min="1" max="1024" step="1" value="1">
+    </div>
+    <div class="ip-field" id="decode-s-inputs" style="display:none;">
+      <label>KV 缓存长度 <span class="unit">(tokens)</span></label>
+      <input type="number" class="num" id="decode-s" min="1" max="1000000" step="1" value="2048">
+    </div>
+
+    <div class="ip-field">
+      <label>&nbsp;</label>
+      <button class="ip-reset" id="ip-reset">重置默认</button>
+    </div>
+  </div>
+
+  <div class="ip-summary" id="ip-summary"></div>
+</section>
+
+<!-- ================= 总览矩阵 ================= -->
+<section id="tab-overview" class="tab active">
+  <div class="card">
+    <p><b>算力强度 (Arithmetic Intensity, FLOP/B)</b> = 阶段 FLOPs ÷ 阶段 DRAM 访存量。
+    Roofline 模型中，性能上限 = min(峰值算力, 带宽 × 强度)。GPU 的<b>脊点 (ridge point)</b>一般在
+    100–300 FLOP/B（如 H100 BF16 ≈ 295），低于脊点即<b>访存受限</b>。</p>
+    <p class="muted small">悬停单元格查看阶段说明与精确值。切换 预填充/解码 观察两个推理阶段的巨大差异。</p>
+  </div>
+
+  <div class="tablewrap">
+    <div id="matrix"></div>
+  </div>
+
+  <div class="legend">
+    <span>低 (访存受限)</span><span class="bar"></span><span>高 (算力受限)</span>
+    <span class="small">色阶: 0.4 → 2000 FLOP/B (对数)</span>
+  </div>
+</section>
+
+<!-- ================= 强度曲线 ================= -->
+<section id="tab-curves" class="tab">
+  <div class="card">
+    <p>各阶段算力强度随<b>解码批量 B</b>（解码阶段）或<b>提示词长度 S</b>（预填充阶段）的变化。
+    GEMV/GEMM 类阶段强度近似线性于批量；注意力核心强度与批量基本无关。</p>
+  </div>
+  <div class="controls">
+    <label>模型</label><select id="curves-model"></select>
+  </div>
+  <div class="chartwrap"><div id="curves-chart"></div></div>
+  <div class="stagelegend" id="curves-legend"></div>
+  <div id="curves-table"></div>
+</section>
+
+<!-- ================= Roofline ================= -->
+<section id="tab-roofline" class="tab">
+  <div class="card">
+    <p><b>Roofline 图</b>：横轴 = 算力强度 (FLOP/B, 对数)，纵轴 = 可达算力 (FLOPS, 对数)。
+    每个点是一个推理阶段，落在所选 GPU 的屋顶线 (roofline) 上：位于斜线段 = 访存受限，位于水平段 = 算力受限。</p>
+  </div>
+  <div class="controls">
+    <label>模型</label><select id="roof-model"></select>
+    <label>GPU</label><select id="roof-device"></select>
+  </div>
+  <div class="chartwrap"><div id="roof-chart"></div></div>
+  <div id="roof-takeaway" class="card"></div>
+</section>
+
+<!-- ================= 架构总表 ================= -->
+<section id="tab-arch" class="tab">
+  <div class="card">
+    <p>从 ModelScope 爬取的 config.json 汇总的架构参数（BF16 统一口径）。
+    <b>每 token 流量</b> = 单 token 解码一步所需读写的 DRAM 字节数（含权重、KV 缓存与激活）。</p>
+  </div>
+  <div class="controls">
+    <label>理论 decode 上限基准 GPU</label>
+    <select id="arch-device"></select>
+    <span id="arch-bw" class="muted small"></span>
+  </div>
+  <div class="tablewrap"><div id="arch-table"></div></div>
+</section>
+
+<!-- ================= 方法论 ================= -->
+<section id="tab-method" class="tab">
+  <div class="card">
+    <h2>阶段划分与计算模型</h2>
+    <p>所有公式按 BF16 权重 (2 B/参数)、BF16 激活 (2 B/元素)、BF16 KV 缓存统一口径计算，便于跨模型公平比较。</p>
+    <div class="tablewrap">
+      <table class="methodtable">
+        <thead><tr><th>阶段</th><th>FLOPs</th><th>DRAM Bytes</th></tr></thead>
+        <tbody>
+          <tr><td>嵌入查表</td><td>0</td><td>B·h·4（读权重行 + 写激活）</td></tr>
+          <tr><td>QKV 投影</td><td>2·P<sub>qkv</sub>·B·L</td><td>P<sub>qkv</sub>·2·L + B·L·(h + q_out)</td></tr>
+          <tr><td>注意力核心 (prefill)</td><td>2·B·H·d·S²·L（causal ×0.5）</td><td>B·S·2·(2H + 2KVH)·d·L（Flash: Q/K/V 读 + O 写）</td></tr>
+          <tr><td>注意力核心 (decode)</td><td>4·B·H·d·S·L</td><td>(2·B·KVH·d·S·2 + 2·B·H·d·2)·L（每步全量读 KV）</td></tr>
+          <tr><td>O 投影</td><td>2·P<sub>o</sub>·B·L</td><td>P<sub>o</sub>·2·L + B·L·(o_in + h)</td></tr>
+          <tr><td>MLP (dense)</td><td>6·h·I·B·L</td><td>3·h·I·2·L + B·2·(2h + 3I)·L</td></tr>
+          <tr><td>MLP (MoE)</td><td>6·K·h·I<sub>e</sub>·B·L<sub>moe</sub></td><td>n<sub>active</sub>·3·h·I<sub>e</sub>·2·L<sub>moe</sub> + 激活</td></tr>
+          <tr><td>MoE 路由</td><td>≈2·h·E·B·L<sub>moe</sub></td><td>h·E·2·L<sub>moe</sub> + B·E·2·L<sub>moe</sub></td></tr>
+          <tr><td>LM Head</td><td>2·h·V·B</td><td>h·V·2 + B·V·2·2 + B·h·2</td></tr>
+          <tr><td>元素级/归一化</td><td>≈12·h + 6·(H+KVH)·d + 6·I（每 token 每层）</td><td>≈2·(10·h + 2·(H+KVH)·d + 3·I)（读+写各一次）</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="small muted">符号：h=hidden，L=层数，H=头数，KVH=KV 头数，d=head_dim，I=FFN 维度，V=词表，
+2    B=批量，S=序列长度，P=参数量，E=专家数，K=每 token 激活专家数，I<sub>e</sub>=专家 FFN 维度，L<sub>moe</sub>=MoE 层数。</p>
+
+    <h2>关键假设</h2>
+    <ul>
+      <li><b>权重读一次</b>：每个 GEMM/GEMV pass 中权重从 DRAM 只读一次，整个 batch 共享（理想 batching）。</li>
+      <li><b>激活读/写一次</b>：每个阶段的输入激活读一次、输出写一次，阶段之间不重复计数。</li>
+      <li><b>MLA 近似</b>：DeepSeek-V3/R1、GLM-4.5、Kimi-K2 的 MLA 注意力按 (nope+rope) 与 v_head_dim 维度建模，KV 缓存按压缩后 (kv_lora_rank + rope) 计。</li>
+      <li><b>MoE decode</b>：每步激活 n<sub>active</sub> = min(E, B×K) 个专家，激活专家的权重各读一次。</li>
+      <li><b>GPU 峰值</b>：BF16/FP16 稠密张量核算力与 HBM 带宽（公开规格，四舍五入）。</li>
+    </ul>
+
+    <h2>局限性</h2>
+    <ul>
+      <li>解析模型未覆盖算子融合、kernel 调度、量化 (W8A8/FP8/Int4)、P/D 分离、投机解码等系统优化。</li>
+      <li>滑动窗口注意力 (Mistral/Gemma-2) 与因果掩码按简化方式处理；超长上下文 (S &gt; 32k) 下注意力核心的强度估计偏保守。</li>
+      <li>元素级/归一化阶段的 FLOPs 与访存为量级估算，非逐算子精确定义。</li>
+      <li>理论 decode 上限 (tok/s) = 带宽 ÷ 每 token 流量，为理想上界，实际通常低 30–60%。</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    由 <b>roofline</b> 项目生成 · 数据源 <a href="https://modelscope.cn/models" target="_blank">ModelScope</a>
+    （config.json 于爬取时缓存至 configs_cache/）· 生成时间 <span id="gen-time"></span>
+  </div>
+</footer>
+
+<script>
+'use strict';
+const DATA = /*__DATA__*/null;
+
+// ---------- state ----------
+const state = {
+  phase: 'decode',
+  prefillS: 2048,
+  decodeB: 1,
+  decodeS: 2048,
+  modelId: DATA.models.length ? DATA.models[Math.min(3, DATA.models.length-1)].id : null,
+  deviceId: 'h100'
+};
+
+const STAGE_COLORS = {
+  embed:   '#94a3b8',
+  qkv:     '#3b82f6',
+  attn:    '#ef4444',
+  oproj:   '#60a5fa',
+  mlp:     '#10b981',
+  router:  '#f59e0b',
+  lmhead:  '#8b5cf6',
+  elemwise:'#64748b',
+  total:   '#111827'
+};
+
+// ---------- helpers ----------
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function fmtI(v){
+  if (v == null || !isFinite(v)) return '—';
+  if (v >= 1000) return Math.round(v).toLocaleString('en-US');
+  if (v >= 100) return Math.round(v).toString();
+  if (v >= 10) return v.toFixed(1);
+  if (v >= 1) return v.toFixed(2);
+  return v.toFixed(3);
+}
+function fmtBytes(v){
+  if (v == null || !isFinite(v)) return '—';
+  if (v >= 1e12) return (v/1e12).toFixed(2) + ' TB';
+  if (v >= 1e9)  return (v/1e9).toFixed(2) + ' GB';
+  if (v >= 1e6)  return (v/1e6).toFixed(1) + ' MB';
+  if (v >= 1e3)  return (v/1e3).toFixed(1) + ' KB';
+  return v.toFixed(0) + ' B';
+}
+function fmtFLOPS(v){
+  if (v >= 1e15) return (v/1e15).toFixed(2) + ' PFLOPS';
+  if (v >= 1e12) return (v/1e12).toFixed(v >= 1e13 ? 0 : 1) + ' TFLOPS';
+  if (v >= 1e9)  return (v/1e9).toFixed(0) + ' GFLOPS';
+  return v.toExponential(0);
+}
+function fmtParams(v){
+  if (v >= 1e12) return (v/1e12).toFixed(2) + 'T';
+  if (v >= 1e9)  return (v/1e9).toFixed(2) + 'B';
+  if (v >= 1e6)  return (v/1e6).toFixed(1) + 'M';
+  return v.toString();
+}
+function heatStyle(v){
+  if (v == null || !isFinite(v)) return 'color:#9ca3af;';
+  const lo = Math.log10(0.4), hi = Math.log10(2000);
+  let t = (Math.log10(Math.max(v, 1e-3)) - lo) / (hi - lo);
+  t = Math.max(0, Math.min(1, t));
+  const hue = 222 - 222 * t;
+  const light = 96 - 22 * t;
+  const sat = 45 + 35 * t;
+  return `background:hsl(${hue},${sat}%,${light}%);`;
+}
+function svgEl(name, attrs){
+  const e = document.createElementNS('http://www.w3.org/2000/svg', name);
+  for (const k in attrs){ e.setAttribute(k, attrs[k]); }
+  return e;
+}
+// 估算文本像素宽度 (CJK 全宽, ASCII 约 0.58 倍字号), 用于标签防重叠布局
+function estTextW(text, fs){
+  let w = 0;
+  for (const ch of text){
+    w += ch.charCodeAt(0) > 0x2E80 ? fs : fs * 0.58;
+  }
+  return w;
+}
+// 白色描边光环: 让标签压在曲线/网格线上仍可读
+function textHalo(el){
+  el.setAttribute('paint-order', 'stroke');
+  el.setAttribute('stroke', '#ffffff');
+  el.setAttribute('stroke-width', '3');
+  el.setAttribute('stroke-linejoin', 'round');
+  return el;
+}
+
+// ============================================================
+// JS 端公式引擎 —— 与 Python roofline/stages.py 完全一致
+// 支持任意 (phase, B, S) 输入, 输入区参数变化时实时重算
+// ============================================================
+const WB = 2.0, AB = 2.0, KVB = 2.0;   // BF16 统一口径
+
+function computeStagesJS(A, phase, B, S){
+  const h = A.h, L = A.L, H = A.H, KVH = A.KVH, V = A.V;
+  const moe = A.moe, mla = A.mla;
+  const hybrid = A.hybrid, dsa = A.dsa;
+  const tokens = phase === 'prefill' ? B * S : B;
+
+  // 层数划分: 混合模型只有 L_full 层做全注意力 (读 KV 缓存)
+  const L_full = hybrid ? hybrid.L_full : L;
+  const L_lin = L - L_full;
+
+  let qkv_params, q_out, o_params, o_in, qk_pair, kv_cache_elems;
+  if (mla){
+    const m = mla;
+    qkv_params = h * m.q_lora + m.q_lora * H * (m.nope_d + m.rope_d)
+               + h * (m.kv_lora + m.rope_d)
+               + m.kv_lora * H * (m.nope_d + m.v_d);
+    q_out = H * (m.nope_d + m.rope_d);
+    o_params = H * m.v_d * h;
+    o_in = H * m.v_d;
+    qk_pair = (m.nope_d + m.rope_d) + m.v_d;
+    kv_cache_elems = m.kv_lora + m.rope_d;
+  } else {
+    qkv_params = h * (H + 2 * KVH) * A.d;
+    q_out = (H + 2 * KVH) * A.d;
+    o_params = h * H * A.d;
+    o_in = H * A.d;
+    qk_pair = 2 * A.d;
+    kv_cache_elems = KVH * A.d;
+  }
+
+  const st = {};
+
+  // ---- 1. 嵌入查表 (纯访存) ----
+  st.embed = { flops: 0, bytes: tokens * h * (WB + AB), intensity: 0 };
+
+  // ---- 2. QKV 投影 ----
+  st.qkv = {
+    flops: 2 * qkv_params * tokens * L,
+    bytes: qkv_params * WB * L + tokens * L * (h + q_out) * AB
+  };
+
+  // ---- 3. 注意力核心 ----
+  let attn_flops, attn_bytes;
+  if (phase === 'prefill'){
+    // 完整注意力层: causal ×0.5
+    attn_flops = B * H * qk_pair * S * S * 0.5 * L_full;
+    if (mla){
+      attn_bytes = (B * S * H * (mla.nope_d + mla.rope_d) * AB
+                  + B * S * H * mla.nope_d * AB
+                  + B * S * H * mla.v_d * AB
+                  + B * S * H * mla.v_d * AB) * L_full;
+    } else {
+      attn_bytes = B * S * AB * (2 * H + 2 * KVH) * A.d * L_full;
+    }
+    if (L_lin){
+      const se = hybrid.state_elems;
+      attn_flops += 2 * se * B * S * L_lin;
+      attn_bytes += B * se * KVB * 2 * L_lin;
+    }
+  } else {
+    // decode: 每步对 min(topk, S) 个 KV 做一次 QK^T + AV
+    const S_eff = dsa ? Math.min(dsa.topk, S) : S;
+    attn_flops = B * H * qk_pair * S_eff * L_full;
+    if (mla){
+      attn_bytes = (B * kv_cache_elems * KVB + B * H * (mla.nope_d + mla.rope_d) * AB
+                  + B * H * mla.v_d * AB) * L_full;
+    } else {
+      attn_bytes = (2 * B * KVH * A.d * S_eff * KVB + 2 * B * H * A.d * AB) * L_full;
+    }
+    if (L_lin){
+      const se = hybrid.state_elems;
+      attn_flops += 2 * se * B * L_lin;
+      attn_bytes += B * se * KVB * 2 * L_lin;
+    }
+  }
+  st.attn = { flops: attn_flops, bytes: attn_bytes };
+
+  // ---- 4. 注意力输出投影 (O proj) ----
+  st.oproj = {
+    flops: 2 * o_params * tokens * L,
+    bytes: o_params * WB * L + tokens * L * (o_in + h) * AB
+  };
+
+  // ---- 5. MLP / MoE 专家 ----
+  let mlp_flops = 0, mlp_bytes = 0;
+  if (moe){
+    const E = moe.E, K = moe.K, Ie = moe.Ie;
+    const shared_n = moe.shared_n, Is = moe.Is;
+    const lgDense = moe.first_dense, lgMoe = L - moe.first_dense;
+
+    if (phase === 'prefill'){
+      mlp_flops += 6 * K * h * Ie * tokens * lgMoe;
+      mlp_bytes += E * 3 * h * Ie * WB * lgMoe;
+    } else {
+      const n_active = Math.min(E, B * K);
+      mlp_flops += 6 * K * h * Ie * B * lgMoe;
+      mlp_bytes += n_active * 3 * h * Ie * WB * lgMoe;
+    }
+    mlp_flops += 6 * shared_n * h * Is * tokens * lgMoe;
+    mlp_bytes += shared_n * 3 * h * Is * WB * lgMoe;
+    mlp_bytes += tokens * AB * (2 * h + 3 * K * Ie + shared_n * 3 * Is) * lgMoe;
+    // dense-MLP 层 (如 DeepSeek/Kimi 前 N 层): 与 Python stages.py 对齐
+    if (lgDense > 0 && A.I){
+      mlp_flops += 6 * h * A.I * tokens * lgDense;
+      mlp_bytes += (3 * h * A.I * WB + tokens * AB * (2 * h + 3 * A.I)) * lgDense;
+    }
+  } else if (A.I){
+    mlp_flops = 6 * h * A.I * tokens * L;
+    mlp_bytes = 3 * h * A.I * WB * L + tokens * AB * (2 * h + 3 * A.I) * L;
+  }
+  st.mlp = { flops: mlp_flops, bytes: mlp_bytes };
+
+  // ---- 6. MoE 路由 (router gating) ----
+  if (moe){
+    const E = moe.E, K = moe.K;
+    const lgMoe = L - moe.first_dense;
+    st.router = {
+      flops: 2 * h * E * tokens * lgMoe + 5 * E * tokens * lgMoe,
+      bytes: h * E * WB * lgMoe + 2 * E * AB * tokens * lgMoe
+    };
+  }
+
+  // ---- 7. LM Head ----
+  st.lmhead = {
+    flops: 2 * h * V * B,
+    bytes: h * V * WB + B * V * AB * 2 + B * h * AB
+  };
+
+  // ---- 8. 元素级 / 归一化 ----
+  let rope_raw;
+  if (mla){
+    rope_raw = H * (mla.nope_d + mla.rope_d) + (mla.kv_lora + mla.rope_d);
+  } else {
+    rope_raw = (H + KVH) * A.d;
+  }
+  const base_flops_per_layer = 10 * h + 2 * h + 4 * rope_raw;
+  const base_bytes_per_layer = AB * (10 * h + 2 * rope_raw);
+
+  let silu_flops, silu_bytes;
+  if (moe){
+    const lgDense = moe.first_dense, lgMoe = L - moe.first_dense;
+    const K = moe.K, Ie = moe.Ie, shared_n = moe.shared_n, Is = moe.Is;
+    silu_bytes = tokens * AB * (lgDense * 3 * A.I + lgMoe * 3 * (K * Ie + shared_n * Is));
+    silu_flops = tokens * (lgDense * 5 * A.I + lgMoe * 5 * (K * Ie + shared_n * Is));
+  } else {
+    silu_bytes = tokens * AB * 3 * A.I * L;
+    silu_flops = tokens * 5 * A.I * L;
+  }
+
+  st.elemwise = {
+    flops: tokens * L * base_flops_per_layer + silu_flops,
+    bytes: tokens * L * base_bytes_per_layer + silu_bytes
+  };
+
+  // ---- 计算强度 + total ----
+  let tflops = 0, tbytes = 0;
+  for (const k in st){
+    const s = st[k];
+    s.intensity = s.bytes > 0 ? s.flops / s.bytes : 0;
+    tflops += s.flops; tbytes += s.bytes;
+  }
+  st.total = { flops: tflops, bytes: tbytes, intensity: tbytes > 0 ? tflops / tbytes : 0 };
+  return st;
+}
+
+// 缓存: model.id + phase + B + S -> stages dict
+const _stageCache = new Map();
+function getStages(m, phase, B, S){
+  const key = `${m.id}|${phase}|${B}|${S}`;
+  if (!_stageCache.has(key)){
+    _stageCache.set(key, computeStagesJS(m.arch, phase, B, S));
+  }
+  return _stageCache.get(key);
+}
+
+// 当前输入区参数下某模型的 stages
+function stagesFor(m){
+  if (state.phase === 'prefill'){
+    return getStages(m, 'prefill', 1, state.prefillS);
+  }
+  return getStages(m, 'decode', state.decodeB, state.decodeS);
+}
+
+// ---------- 渲染: 总览矩阵 ----------
+function renderMatrix(){
+  const stageIds = DATA.stages.map(s => s.id);
+  let html = '<table class="matrix"><thead><tr><th class="rowhead">模型</th>';
+  for (const st of DATA.stages) html += `<th title="${esc(st.desc)}">${esc(st.name)}</th>`;
+  html += '<th class="total">整体</th></tr></thead><tbody>';
+  for (const m of DATA.models){
+    const cell = stagesFor(m);
+    html += `<tr><td class="rowhead"><div class="mname">${esc(m.name)}</div><div class="msub">${esc(m.note||'')}</div></td>`;
+    for (const sid of stageIds){
+      const s = cell[sid];
+      const v = s ? s.intensity : null;
+      const st = DATA.stages.find(x => x.id === sid);
+      html += `<td style="${heatStyle(v)}" title="${esc(st.name)}: ${v==null?'—':fmtI(v)+' FLOP/B'}">${v==null?'—':fmtI(v)}</td>`;
+    }
+    const t = cell.total.intensity;
+    html += `<td class="total" style="${heatStyle(t)}" title="整体: ${fmtI(t)} FLOP/B">${fmtI(t)}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  $('#matrix').innerHTML = html;
+}
+
+// ---------- 渲染: 强度曲线 ----------
+function renderCurves(){
+  const wrap = $('#curves-chart');
+  const m = DATA.models.find(x => x.id === state.modelId);
+  if (!m){ wrap.innerHTML = ''; return; }
+  const phase = state.phase;
+  // 扫描范围: prefill 扫 S, decode 扫 B (其余参数取输入区当前值)
+  const xs = phase === 'prefill'
+    ? [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072]
+    : [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024];
+  const xLabel = phase === 'prefill' ? '提示词长度 S (tokens, 对数)' : '解码批量 B (sequences, 对数)';
+
+  const stageIds = DATA.stages.map(s => s.id);
+  const series = [];
+  let ymin = Infinity, ymax = 0;
+  for (const sid of stageIds){
+    const pts = [];
+    for (const x of xs){
+      const st = phase === 'prefill'
+        ? getStages(m, 'prefill', 1, x)
+        : getStages(m, 'decode', x, state.decodeS);
+      const v = st[sid] ? st[sid].intensity : null;
+      if (v != null && isFinite(v) && v > 0) pts.push([x, v]);
+    }
+    if (pts.length){
+      for (const p of pts){ ymin = Math.min(ymin, p[1]); ymax = Math.max(ymax, p[1]); }
+      series.push({ sid, pts, label: DATA.stages.find(s => s.id === sid).name });
+    }
+  }
+  if (!series.length){ wrap.innerHTML = '<p class="muted">无数据</p>'; return; }
+  ymin = Math.max(ymin * 0.5, 0.01);
+  ymax = ymax * 2;
+
+  const W = 960, H = 480, ML = 70, MR = 24, MT = 18, MB = 52;
+  const X = v => ML + (Math.log10(v) - Math.log10(xs[0])) / (Math.log10(xs[xs.length-1]) - Math.log10(xs[0])) * (W - ML - MR);
+  const Y = v => H - MB - (Math.log10(v) - Math.log10(ymin)) / (Math.log10(ymax) - Math.log10(ymin)) * (H - MT - MB);
+
+  const svg = svgEl('svg', {viewBox: `0 0 ${W} ${H}`, class: 'chart'});
+
+  // y gridlines
+  for (let p = Math.floor(Math.log10(ymin)); p <= Math.ceil(Math.log10(ymax)); p++){
+    const v = Math.pow(10, p);
+    if (v < ymin || v > ymax) continue;
+    const y = Y(v);
+    svg.appendChild(svgEl('line', {x1: ML, y1: y, x2: W - MR, y2: y, stroke: '#e5e7eb', 'stroke-width': 1}));
+    const t = svgEl('text', {x: ML - 8, y: y + 4, 'text-anchor': 'end', 'font-size': 11, fill: '#6b7280'});
+    t.textContent = fmtI(v);
+    svg.appendChild(t);
+  }
+  // x gridlines
+  for (const x of xs){
+    const gx = X(x);
+    svg.appendChild(svgEl('line', {x1: gx, y1: MT, x2: gx, y2: H - MB, stroke: '#f3f4f6', 'stroke-width': 1}));
+    const t = svgEl('text', {x: gx, y: H - MB + 18, 'text-anchor': 'middle', 'font-size': 11, fill: '#6b7280'});
+    t.textContent = x >= 1024 ? (x/1024) + 'k' : x.toString();
+    svg.appendChild(t);
+  }
+  // axes
+  svg.appendChild(svgEl('line', {x1: ML, y1: MT, x2: ML, y2: H - MB, stroke: '#9ca3af', 'stroke-width': 1}));
+  svg.appendChild(svgEl('line', {x1: ML, y1: H - MB, x2: W - MR, y2: H - MB, stroke: '#9ca3af', 'stroke-width': 1}));
+  const xl = svgEl('text', {x: (ML + W - MR)/2, y: H - 8, 'text-anchor': 'middle', 'font-size': 12, fill: '#374151'});
+  xl.textContent = xLabel;
+  svg.appendChild(xl);
+  const yl = svgEl('text', {x: 14, y: (MT + H - MB)/2, 'text-anchor': 'middle', 'font-size': 12, fill: '#374151',
+    transform: `rotate(-90 14 ${(MT + H - MB)/2})`});
+  yl.textContent = '算力强度 (FLOP/B)';
+  svg.appendChild(yl);
+
+  // device ridge horizontal lines + 防重叠标签
+  const ridges = DATA.devices
+    .map(d => ({d, ridge: d.peak / d.bw}))
+    .filter(r => r.ridge >= ymin && r.ridge <= ymax)
+    .sort((a, b) => Y(a.ridge) - Y(b.ridge));   // 自上而下
+  const rfs = 10, rlineH = rfs + 5;
+  let prevRy = -Infinity;
+  const rlabels = [];
+  for (const r of ridges){
+    const y = Y(r.ridge);
+    svg.appendChild(svgEl('line', {x1: ML, y1: y, x2: W - MR, y2: y, stroke: '#9ca3af',
+      'stroke-width': 1, 'stroke-dasharray': '6 4'}));
+    let ly = Math.max(y - 5, prevRy + rlineH);
+    rlabels.push({r, ly});
+    prevRy = ly;
+  }
+  for (const rl of rlabels){
+    const y = Y(rl.r.ridge);
+    // 引线: 标签被推离脊线时, 从标签连到脊线右端
+    if (Math.abs((rl.ly + 5) - y) > 1.5){
+      svg.appendChild(svgEl('line', {x1: W - MR, y1: y, x2: W - MR - 4, y2: rl.ly + 3.5,
+        stroke: '#cbd5e1', 'stroke-width': 1}));
+    }
+    const t = svgEl('text', {x: W - MR - 6, y: rl.ly, 'text-anchor': 'end', 'font-size': rfs, fill: '#6b7280'});
+    textHalo(t);
+    t.textContent = `${rl.r.d.name} 脊点 ≈ ${fmtI(rl.r.ridge)}`;
+    svg.appendChild(t);
+  }
+
+  // series polylines
+  for (const s of series){
+    const ptsStr = s.pts.map(p => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(' ');
+    svg.appendChild(svgEl('polyline', {points: ptsStr, fill: 'none', stroke: STAGE_COLORS[s.sid] || '#333',
+      'stroke-width': 2}));
+    const last = s.pts[s.pts.length - 1];
+    const dot = svgEl('circle', {cx: X(last[0]), cy: Y(last[1]), r: 3.5, fill: STAGE_COLORS[s.sid] || '#333'});
+    const st = DATA.stages.find(x => x.id === s.sid);
+    dot.appendChild(svgEl('title', {}));
+    dot.querySelector('title').textContent = `${st.name}: ${fmtI(last[1])} FLOP/B`;
+    svg.appendChild(dot);
+  }
+
+  // 当前输入值标记线
+  const curX = phase === 'prefill' ? state.prefillS : state.decodeB;
+  if (curX >= xs[0] && curX <= xs[xs.length-1]){
+    const gx = X(curX);
+    svg.appendChild(svgEl('line', {x1: gx, y1: MT, x2: gx, y2: H - MB, stroke: '#dc2626',
+      'stroke-width': 1.5, 'stroke-dasharray': '4 3'}));
+    const t = svgEl('text', {x: gx + 4, y: MT + 12, 'font-size': 10, fill: '#dc2626'});
+    t.textContent = '当前输入';
+    svg.appendChild(t);
+  }
+
+  wrap.innerHTML = '';
+  wrap.appendChild(svg);
+
+  // legend
+  let lg = '';
+  for (const s of series){
+    lg += `<span class="chip"><span class="dot" style="background:${STAGE_COLORS[s.sid]}"></span>${esc(s.label)}</span>`;
+  }
+  $('#curves-legend').innerHTML = lg;
+
+  // data table (current scenario)
+  const cell = stagesFor(m);
+  let th = '<table><thead><tr><th>阶段</th><th>强度 (FLOP/B)</th></tr></thead><tbody>';
+  for (const sid of stageIds){
+    const st = DATA.stages.find(x => x.id === sid);
+    const s = cell[sid];
+    if (!s) continue;
+    th += `<tr><td>${esc(st.name)}</td><td>${fmtI(s.intensity)}</td></tr>`;
+  }
+  th += `<tr><td><b>整体</b></td><td><b>${fmtI(cell.total.intensity)}</b></td></tr>`;
+  th += '</tbody></table>';
+  $('#curves-table').innerHTML = th;
+}
+
+// ---------- 渲染: Roofline ----------
+function renderRoofline(){
+  const wrap = $('#roof-chart');
+  const m = DATA.models.find(x => x.id === state.modelId);
+  const dev = DATA.devices.find(d => d.id === state.deviceId) || DATA.devices[0];
+  if (!m){ wrap.innerHTML = ''; return; }
+  const cell = stagesFor(m);
+
+  const xmin = 0.2, xmax = 2e5;
+  const ymin = 2e10, ymax = 4e15;
+  const W = 960, H = 520, ML = 90, MR = 24, MT = 18, MB = 52;
+  const X = v => ML + (Math.log10(v) - Math.log10(xmin)) / (Math.log10(xmax) - Math.log10(xmin)) * (W - ML - MR);
+  const Y = v => H - MB - (Math.log10(v) - Math.log10(ymin)) / (Math.log10(ymax) - Math.log10(ymin)) * (H - MT - MB);
+
+  const svg = svgEl('svg', {viewBox: `0 0 ${W} ${H}`, class: 'chart'});
+
+  // gridlines
+  for (let p = Math.floor(Math.log10(ymin)); p <= Math.ceil(Math.log10(ymax)); p++){
+    const v = Math.pow(10, p);
+    if (v < ymin || v > ymax) continue;
+    svg.appendChild(svgEl('line', {x1: ML, y1: Y(v), x2: W - MR, y2: Y(v), stroke: '#e5e7eb'}));
+    const t = svgEl('text', {x: ML - 8, y: Y(v) + 4, 'text-anchor': 'end', 'font-size': 10, fill: '#6b7280'});
+    t.textContent = fmtFLOPS(v);
+    svg.appendChild(t);
+  }
+  for (let p = Math.floor(Math.log10(xmin)); p <= Math.ceil(Math.log10(xmax)); p++){
+    const v = Math.pow(10, p);
+    if (v < xmin || v > xmax) continue;
+    svg.appendChild(svgEl('line', {x1: X(v), y1: MT, x2: X(v), y2: H - MB, stroke: '#f3f4f6'}));
+    const t = svgEl('text', {x: X(v), y: H - MB + 16, 'text-anchor': 'middle', 'font-size': 10, fill: '#6b7280'});
+    t.textContent = fmtI(v);
+    svg.appendChild(t);
+  }
+  svg.appendChild(svgEl('line', {x1: ML, y1: MT, x2: ML, y2: H - MB, stroke: '#9ca3af'}));
+  svg.appendChild(svgEl('line', {x1: ML, y1: H - MB, x2: W - MR, y2: H - MB, stroke: '#9ca3af'}));
+  const xl = svgEl('text', {x: (ML + W - MR)/2, y: H - 8, 'text-anchor': 'middle', 'font-size': 12, fill: '#374151'});
+  xl.textContent = '算力强度 (FLOP/B)';
+  svg.appendChild(xl);
+  const yl = svgEl('text', {x: 18, y: (MT + H - MB)/2, 'text-anchor': 'middle', 'font-size': 12, fill: '#374151',
+    transform: `rotate(-90 18 ${(MT + H - MB)/2})`});
+  yl.textContent = '可达算力 (FLOPS)';
+  svg.appendChild(yl);
+
+  // device rooflines
+  for (const d of DATA.devices){
+    const pts = [];
+    const n = 100;
+    for (let i = 0; i <= n; i++){
+      const x = Math.pow(10, Math.log10(xmin) + (Math.log10(xmax) - Math.log10(xmin)) * i / n);
+      pts.push([x, Math.min(d.peak, x * d.bw)]);
+    }
+    const ptsStr = pts.map(p => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(' ');
+    const isSel = d.id === dev.id;
+    svg.appendChild(svgEl('polyline', {points: ptsStr, fill: 'none',
+      stroke: isSel ? '#dc2626' : '#d1d5db', 'stroke-width': isSel ? 2.5 : 1.2}));
+  }
+  // selected device ridge point + label (居中置于脊点正上方, 避开右侧阶段标签)
+  const ridge = dev.peak / dev.bw;
+  svg.appendChild(svgEl('circle', {cx: X(ridge), cy: Y(dev.peak), r: 4, fill: '#dc2626'}));
+  const rl = svgEl('text', {x: X(ridge), y: Y(dev.peak) - 14, 'text-anchor': 'middle', 'font-size': 11,
+    fill: '#b91c1c', stroke: '#fff', 'stroke-width': 2.5, 'paint-order': 'stroke'});
+  rl.textContent = `${dev.name} 脊点 = ${fmtI(ridge)} FLOP/B`;
+  svg.appendChild(rl);
+
+  // stage points —— 标签防重叠: 按 y 排序后垂直压开, 位移大时画引导线
+  const stageIds = DATA.stages.map(s => s.id);
+  const fs = 10.5, minGap = fs + 4;
+  const items = [];
+  for (const sid of stageIds){
+    const s = cell[sid];
+    if (!s || s.intensity == null || !isFinite(s.intensity)) continue;
+    const perf = Math.min(dev.peak, s.intensity * dev.bw);
+    const st = DATA.stages.find(x2 => x2.id === sid);
+    items.push({ sid, s, perf, st, px: X(s.intensity), py: Y(perf), ly: Y(perf) });
+  }
+  // 整体点一并纳入防重叠布局 (菱形标记)
+  if (cell.total && cell.total.intensity != null && isFinite(cell.total.intensity)){
+    const perf = Math.min(dev.peak, cell.total.intensity * dev.bw);
+    items.push({ sid: 'total', s: cell.total, perf, st: null,
+      px: X(cell.total.intensity), py: Y(perf), ly: Y(perf), isTotal: true });
+  }
+  items.sort((a, b) => a.ly - b.ly);
+  for (let i = 1; i < items.length; i++){
+    if (items[i].ly - items[i-1].ly < minGap) items[i].ly = items[i-1].ly + minGap;
+  }
+  // 自下而上夹回绘图区, 同时保持相邻标签最小间距
+  const yMax = H - MB - 6;
+  for (let i = items.length - 1; i > 0; i--){
+    if (items[i].ly > yMax) items[i].ly = yMax;
+    if (items[i-1].ly > items[i].ly - minGap) items[i-1].ly = items[i].ly - minGap;
+  }
+  for (const it of items){
+    if (it.isTotal){
+      const d = `M ${it.px} ${it.py-6} L ${it.px+6} ${it.py} L ${it.px} ${it.py+6} L ${it.px-6} ${it.py} Z`;
+      svg.appendChild(svgEl('path', {d, fill: '#111827', stroke: '#fff', 'stroke-width': 1.5}));
+    } else {
+      svg.appendChild(svgEl('circle', {cx: it.px, cy: it.py, r: 5, fill: STAGE_COLORS[it.sid] || '#333',
+        stroke: '#fff', 'stroke-width': 1.5}));
+    }
+    // 标签被压开时, 从数据点画一条浅色引导线到标签
+    if (Math.abs(it.ly - it.py) > 6){
+      svg.appendChild(svgEl('line', {x1: it.px, y1: it.py, x2: it.px + 7, y2: it.ly,
+        stroke: '#c4c9d4', 'stroke-width': 0.8}));
+    }
+    const label = it.isTotal ? '整体' : it.st.name;
+    const t = svgEl('text', {x: it.px + 9, y: it.ly + 3.5, 'font-size': fs,
+      'font-weight': it.isTotal ? 700 : 400, fill: it.isTotal ? '#111827' : '#374151',
+      stroke: '#fff', 'stroke-width': 2.5, 'paint-order': 'stroke'});
+    t.textContent = label;
+    const title = svgEl('title', {});
+    title.textContent = `${label}: 强度 ${fmtI(it.s.intensity)} FLOP/B, 可达 ${fmtFLOPS(it.perf)}`;
+    svg.appendChild(t);
+    svg.lastChild.appendChild(title);
+  }
+
+  wrap.innerHTML = '';
+  wrap.appendChild(svg);
+
+  // takeaway
+  const t_total = cell.total.intensity;
+  const model = m ? m.name : '—';
+  let html = `<p><b>${esc(model)}</b> 在当前场景 (${esc(state.phase === 'prefill' ? 'prefill S=' + state.prefillS : 'decode B=' + state.decodeB + ', S_kv=' + state.decodeS)}) 下:</p>`;
+  const stagesSorted = stageIds.map(sid => ({sid, v: cell[sid] ? cell[sid].intensity : null})).filter(x => x.v != null && isFinite(x.v));
+  if (stagesSorted.length){
+    const hi = stagesSorted.reduce((a, b) => b.v > a.v ? b : a);
+    const lo = stagesSorted.reduce((a, b) => b.v < a.v ? b : a);
+    const stHi = DATA.stages.find(s => s.id === hi.sid);
+    const stLo = DATA.stages.find(s => s.id === lo.sid);
+    html += `<p>各阶段强度从 <b>${fmtI(lo.v)}</b> (${esc(stLo.name)}) 到 <b>${fmtI(hi.v)}</b> (${esc(stHi.name)}) FLOP/B。</p>`;
+  }
+  if (t_total != null && isFinite(t_total)){
+    const mb = t_total < ridge;
+    html += `<p>整体强度 <b>${fmtI(t_total)} FLOP/B</b>, ${mb ? '<b>低于</b>' : '<b>高于</b>'} ${esc(dev.name)} 脊点 (${fmtI(ridge)} FLOP/B), 当前阶段${mb ? '受限于显存带宽 (memory-bound)' : '受限于峰值算力 (compute-bound)'}。</p>`;
+  }
+  $('#roof-takeaway').innerHTML = html;
+}
+
+// ---------- 渲染: 架构总表 ----------
+function renderArch(){
+  const dev = DATA.devices.find(d => d.id === state.deviceId) || DATA.devices[0];
+  let html = '<table class="arch"><thead><tr>' +
+    '<th class="rowhead">模型</th><th>家族</th><th>总参数</th><th>激活参数/token</th>' +
+    '<th>层数 L</th><th>hidden h</th><th>注意力 (H/KVH/d)</th><th>FFN</th><th>词表 V</th>' +
+    '<th>权重 BF16</th><th>Decode 每token流量</th>' +
+    `<th>理论 decode 上限 @${esc(dev.name)}</th></tr></thead><tbody>`;
+  for (const m of DATA.models){
+    const a = m.arch;
+    const attn = `${a.H}/${a.KVH}` + (a.mla ? ' · MLA' : '') + (a.d ? ` · d=${a.d}` : '');
+    let ffn;
+    if (a.moe){
+      ffn = `MoE E=${a.moe.E}, K=${a.moe.K}, I_e=${a.moe.Ie}` + (a.moe.shared_n ? `, shared=${a.moe.shared_n}` : '');
+    } else {
+      ffn = `Dense I=${a.I}`;
+    }
+    const tps = Math.round(dev.bw / m.stats.bytes_per_token);
+    html += `<tr><td class="rowhead">${esc(m.name)}</td><td>${esc(m.family)}</td>` +
+      `<td>${fmtParams(m.stats.total_params)}</td><td>${fmtParams(m.stats.active_params)}</td>` +
+      `<td>${a.L}</td><td>${a.h}</td><td>${esc(attn)}</td><td>${esc(ffn)}</td><td>${a.V.toLocaleString('en-US')}</td>` +
+      `<td>${fmtBytes(m.stats.total_params * 2)}</td>` +
+      `<td>${fmtBytes(m.stats.bytes_per_token)}</td>` +
+      `<td>${tps.toLocaleString('en-US')} tok/s</td></tr>`;
+  }
+  html += '</tbody></table>';
+  $('#arch-table').innerHTML = html;
+  $('#arch-bw').textContent = `${dev.name}: ${fmtFLOPS(dev.peak)} / ${(dev.bw/1e9).toFixed(0)} GB/s, 脊点 ${fmtI(dev.peak/dev.bw)} FLOP/B`;
+}
+
+// ---------- 渲染: 输入区摘要 ----------
+function renderInputSummary(){
+  const el = $('#ip-summary');
+  if (state.phase === 'prefill'){
+    el.innerHTML = `当前场景: <b>Prefill 预填充</b> · 序列长度 S = <b>${state.prefillS.toLocaleString('en-US')}</b> tokens · 批量 B = <b>1</b><br>` +
+      `<span class="small" style="color:#94a3b8;">一次前向处理 ${state.prefillS.toLocaleString('en-US')} 个 token, 注意力核心 FLOPs ∝ S² (causal ×0.5)</span>`;
+  } else {
+    el.innerHTML = `当前场景: <b>Decode 解码</b> · 批量 B = <b>${state.decodeB}</b> · KV 缓存长度 = <b>${state.decodeS.toLocaleString('en-US')}</b> tokens<br>` +
+      `<span class="small" style="color:#94a3b8;">每步生成 B 个 token, 每步读 KV 缓存 (${state.decodeS.toLocaleString('en-US')} × KVH × d)</span>`;
+  }
+}
+
+// ---------- 渲染入口 ----------
+function renderAll(){
+  renderInputSummary();
+  renderMatrix();
+  renderCurves();
+  renderRoofline();
+  renderArch();
+}
+
+// ---------- 初始化 ----------
+function init(){
+  // populate model selects
+  const modelOpts = DATA.models.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('');
+  $('#curves-model').innerHTML = modelOpts;
+  $('#roof-model').innerHTML = modelOpts;
+  $('#curves-model').value = state.modelId;
+  $('#roof-model').value = state.modelId;
+
+  // device selects
+  const devOpts = DATA.devices.map(d => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('');
+  $('#roof-device').innerHTML = devOpts;
+  $('#arch-device').innerHTML = devOpts;
+  $('#roof-device').value = state.deviceId;
+  $('#arch-device').value = state.deviceId;
+
+  // tabs
+  $$('#tabs button').forEach(b => b.onclick = () => {
+    $$('#tabs button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    $$('.tab').forEach(t => t.classList.remove('active'));
+    $('#tab-' + b.dataset.tab).classList.add('active');
+  });
+
+  // ---------- 输入区交互 ----------
+  // 阶段切换
+  $$('#phase-seg button').forEach(btn => btn.onclick = () => {
+    state.phase = btn.dataset.phase;
+    syncInputUI();
+    renderAll();
+  });
+
+  // 数字输入 (失焦/回车后重算)
+  const bindNum = (id, key, min, max) => {
+    const el = $(id);
+    const apply = () => {
+      let v = parseInt(el.value, 10);
+      if (isNaN(v)) v = min;
+      v = Math.max(min, Math.min(max, v));
+      el.value = v;
+      state[key] = v;
+      renderAll();
+    };
+    el.addEventListener('change', apply);
+    el.addEventListener('keydown', e => { if (e.key === 'Enter') apply(); });
+  };
+  bindNum('#prefill-s', 'prefillS', 1, 1000000);
+  bindNum('#decode-b', 'decodeB', 1, 1024);
+  bindNum('#decode-s', 'decodeS', 1, 1000000);
+
+  // 重置
+  $('#ip-reset').onclick = () => {
+    state.prefillS = 2048; state.decodeB = 1; state.decodeS = 2048;
+    $('#prefill-s').value = 2048; $('#decode-b').value = 1; $('#decode-s').value = 2048;
+    renderAll();
+  };
+
+  // model changes
+  $('#curves-model').onchange = e => { state.modelId = e.target.value; $('#roof-model').value = e.target.value; renderAll(); };
+  $('#roof-model').onchange = e => { state.modelId = e.target.value; $('#curves-model').value = e.target.value; renderAll(); };
+
+  // device changes
+  $('#roof-device').onchange = e => { state.deviceId = e.target.value; $('#arch-device').value = e.target.value; renderAll(); };
+  $('#arch-device').onchange = e => { state.deviceId = e.target.value; $('#roof-device').value = e.target.value; renderAll(); };
+
+  // 生成时间
+  $('#gen-time').textContent = DATA.generated || '';
+
+  syncInputUI();
+  renderAll();
+}
+
+// 输入区 UI 同步: prefill/decode 显示对应输入
+function syncInputUI(){
+  const isPre = state.phase === 'prefill';
+  $('#prefill-inputs').style.display = isPre ? '' : 'none';
+  $('#decode-inputs').style.display = isPre ? 'none' : '';
+  $('#decode-s-inputs').style.display = isPre ? 'none' : '';
+  $$('#phase-seg button').forEach(btn => btn.classList.toggle('active', btn.dataset.phase === state.phase));
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
