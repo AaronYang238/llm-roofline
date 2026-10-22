@@ -11,9 +11,10 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import re
+import sys
 from pathlib import Path
 
-from roofline.arch import normalize
+from roofline.arch import data_warnings, normalize
 from roofline.compute import (
     DECODE_B,
     DECODE_S,
@@ -38,6 +39,13 @@ def slugify(s: str) -> str:
 
 
 def main():
+    # Windows 控制台默认 cp936, 统一成 UTF-8 避免中文输出乱码
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
     ap = argparse.ArgumentParser(description="大模型推理算力强度 (FLOP/B) 分析工具")
     ap.add_argument("--refresh", action="store_true", help="忽略缓存重新爬取")
     ap.add_argument("--out", type=Path, default=OUT_DIR / "roofline_report.html",
@@ -68,6 +76,7 @@ def main():
                 "url": model_url(entry["ns"], r["repo_used"]),
                 "arch": {k: arch[k] for k in ARCH_KEYS},
                 "stats": stats,
+                "warnings": data_warnings(arch, stats),
                 "cube": cube,
             })
         except Exception as e:  # noqa: BLE001

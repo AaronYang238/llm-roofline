@@ -9,12 +9,12 @@ from .stages import compute_stages
 # MI308X (gfx942, 80 CU × 1850 MHz): BF16 303.1 / FP8 606.2 TFLOP/s, HBM 5325 GB/s
 # 脊点 ≈ 56.9 FLOP/B —— 带宽与显存容量满血(MI300X 同级)、算力仅 MI300X 的 23%
 DEVICES = [
-    {"id": "v100", "name": "V100-SXM2", "peak": 125e12, "bw": 900e9},
-    {"id": "a100", "name": "A100-SXM4", "peak": 312e12, "bw": 2039e9},
-    {"id": "h100", "name": "H100-SXM", "peak": 989e12, "bw": 3350e9},
-    {"id": "h20", "name": "H20", "peak": 148e12, "bw": 4000e9},
-    {"id": "mi308x", "name": "MI308X", "peak": 303.1e12, "bw": 5325e9},
-    {"id": "b200", "name": "B200", "peak": 2250e12, "bw": 8000e9},
+    {"id": "v100", "name": "V100-SXM2", "peak": 125e12, "bw": 900e9, "mem": 32e9},
+    {"id": "a100", "name": "A100-SXM4", "peak": 312e12, "bw": 2039e9, "mem": 80e9},
+    {"id": "h100", "name": "H100-SXM", "peak": 989e12, "bw": 3350e9, "mem": 80e9},
+    {"id": "h20", "name": "H20", "peak": 148e12, "bw": 4000e9, "mem": 96e9},
+    {"id": "mi308x", "name": "MI308X", "peak": 303.1e12, "bw": 5325e9, "mem": 192e9},
+    {"id": "b200", "name": "B200", "peak": 2250e12, "bw": 8000e9, "mem": 192e9},
 ]
 
 # ---------- 场景网格 ----------
@@ -115,6 +115,7 @@ def build_stats(A: dict) -> dict:
     return {
         "total_params": pc["total"],
         "active_params": pc["active"],
+        "weight_bytes": pc["total"] * 2.0,
         "flops_per_token": flops_per_token,
         "bytes_per_token": bytes_per_token,
     }

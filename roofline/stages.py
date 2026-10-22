@@ -54,7 +54,7 @@ def compute_stages(A: dict, phase: str, B: int = 1, S: int = 2048) -> dict:
         q_out = H * (m["nope_d"] + m["rope_d"])
         o_params = H * m["v_d"] * h
         o_in = H * m["v_d"]
-        qk_pair = (m["nope_d"] + m["rope_d"]) + m["v_d"]   # 每对 (q,k) 每头 FLOPs 数
+        qk_pair = (m["nope_d"] + m["rope_d"]) + m["v_d"]   # QK^T + AV 每对每头的基础维度
         kv_cache_elems = m["kv_lora"] + m["rope_d"]
     else:
         qkv_params = h * (H + 2 * KVH) * d
@@ -77,8 +77,8 @@ def compute_stages(A: dict, phase: str, B: int = 1, S: int = 2048) -> dict:
     # ---------- 3. 注意力核心 ----------
     # 线性注意力层 (KDA/GDN): 固定状态, 每 token 2·se FLOPs, decode 每步读写状态
     if phase == "prefill":
-        # 完整注意力层: causal ×0.5
-        attn_flops = B * H * qk_pair * S * S * 0.5 * L_full
+        # 完整注意力层: QK^T 与 AV 各 2·d FLOPs/对, causal ×0.5
+        attn_flops = 2 * B * H * qk_pair * S * S * 0.5 * L_full
         if mla:
             attn_bytes = (B * S * H * (mla["nope_d"] + mla["rope_d"]) * AB
                           + B * S * H * mla["nope_d"] * AB
@@ -91,11 +91,13 @@ def compute_stages(A: dict, phase: str, B: int = 1, S: int = 2048) -> dict:
             attn_flops += 2 * se * B * S * L_lin   # 顺序处理 S 个 token
             attn_bytes += B * se * KVB * 2 * L_lin  # 状态读+写一次
     else:
-        # decode: 每步对 min(topk, S) 个 KV 做一次 QK^T + AV
+        # decode: 每步对 min(topk, S) 个 KV 做一次 QK^T + AV (各 2·d)
         S_eff = min(dsa["topk"], S) if dsa else S
-        attn_flops = B * H * qk_pair * S_eff * L_full
+        attn_flops = 2 * B * H * qk_pair * S_eff * L_full
         if mla:
-            attn_bytes = (B * kv_cache_elems * KVB + B * H * (mla["nope_d"] + mla["rope_d"]) * AB
+            # MLA decode: 读全部 S_eff 个 token 的 latent KV (kv_lora + rope)
+            attn_bytes = (B * S_eff * kv_cache_elems * KVB
+                          + B * H * (mla["nope_d"] + mla["rope_d"]) * AB
                           + B * H * mla["v_d"] * AB) * L_full
         else:
             attn_bytes = (2 * B * KVH * d * S_eff * KVB + 2 * B * H * d * AB) * L_full

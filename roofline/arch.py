@@ -15,6 +15,7 @@ DSA 稀疏注意力模型 (DeepSeek-V4, GLM-5.3) 附加:
 from __future__ import annotations
 
 import json
+import re
 
 
 def _first(d, keys, default=None):
@@ -42,15 +43,17 @@ def normalize(
     if KVH is None:
         KVH = H
     V = _first(cfg, ["vocab_size", "padded_vocab_size"])
-    tie = bool(cfg.get("tie_word_embeddings", False))
+
+    # tie_word_embeddings 在部分 config (如 Gemma 2) 中缺省;
+    # 此时回退到模型清单里的人工标注 ("tied"), 避免重复计算 LM head。
+    tie_raw = cfg.get("tie_word_embeddings")
+    tie_inferred = tie_raw is None
+    tie = bool(tie_raw) if tie_raw is not None else ("tied" in note.lower())
+
     d = _first(cfg, ["head_dim", "kv_channels"])
+    d_inferred = d is None
     if d is None:
-        if H and h % H == 0:
-            d = h // H
-        elif H:
-            d = 256 if (h * 256) % H == 0 else h / H
-        else:
-            d = None
+        d = (h / H) if H else None
 
     # ---------- MLA (多级潜注意力) ----------
     mla = None
@@ -65,24 +68,61 @@ def normalize(
 
     # ---------- MoE ----------
     moe = None
+    k_inferred = False
+    # dense MLP 维度: 常规字段 -> ChatGLM 系 ffn_hidden_size
+    I = _first(cfg, ["intermediate_size", "ffn_hidden_size"])
     E = _first(cfg, ["num_experts", "num_local_experts", "n_routed_experts"])
     if E:
+        # 注意: 不能用通用的 top_k —— 很多 config 的 top_k 是采样参数
+        # (例如 Kimi-K3: top_k=50, num_experts_per_token=16), 会高估激活专家数。
         K = _first(
             cfg,
-            ["num_experts_per_tok", "experts_per_tok", "num_selected_experts", "top_k"],
-            2,
+            [
+                "num_experts_per_tok",
+                "num_experts_per_token",
+                "experts_per_tok",
+                "num_selected_experts",
+                "n_experts_per_tok",
+            ],
+            None,
         )
-        Ie = _first(cfg, ["moe_intermediate_size", "intermediate_size"])
+        if K is None:
+            K = 2
+            k_inferred = True
+        K = int(K)
+
+        # 专家 FFN 维度: 不同家族字段不同。优先使用显式的 expert 维度字段,
+        # 否则回退到 moe_intermediate_size。
+        Ie = _first(
+            cfg,
+            [
+                "expert_hidden_dim",
+                "routed_expert_hidden_size",
+                "moe_intermediate_size",
+                "intermediate_size",
+            ],
+        )
+        if Ie is None:
+            Ie = I if I else h * 4
+
+        # 共享专家: Qwen3.5/Holo3 只给 shared_expert_intermediate_size,
+        # 未给 num_shared_experts, 此时按 1 个共享专家计。
+        shared_size = _first(
+            cfg, ["shared_expert_intermediate_size", "moe_shared_expert_intermediate_size"]
+        )
         shared_n = _first(cfg, ["n_shared_experts", "num_shared_experts"], 0)
-        Is = _first(cfg, ["moe_intermediate_size", "intermediate_size"])
-        first_dense = _first(cfg, ["first_k_dense_replace"], 0)
+        if shared_size is not None and not shared_n:
+            shared_n = 1
+        Is = shared_size if shared_size is not None else Ie
+
         moe = {
             "E": E,
             "K": K,
             "Ie": Ie,
             "shared_n": shared_n,
             "Is": Is,
-            "first_dense": first_dense,
+            "first_dense": min(int(_first(cfg, ["first_k_dense_replace"], 0) or 0), L),
+            "k_inferred": k_inferred,
         }
 
     # ---------- 混合线性注意力 (GDN / KDA) ----------
@@ -97,13 +137,13 @@ def normalize(
             nvkh = _first(cfg, ["linear_num_value_heads"], 32)
             kdim = _first(cfg, ["linear_key_head_dim"], 128)
             vdim = _first(cfg, ["linear_value_head_dim"], 128)
-            hybrid = {"L_full": full, "state_elems": nvkh * kdim * vdim}
+            hybrid = {"L_full": min(full, L), "state_elems": nvkh * kdim * vdim}
     elif isinstance(lac, dict) and lac:
         # Kimi-K3 / GLM-5.3-Flash: linear_attn_config 带 kda_layers (KDA)
         full_layers = lac.get("full_attn_layers")
         if full_layers is not None:
             state = lac.get("num_heads", 64) * (lac.get("head_dim", 128) ** 2)
-            hybrid = {"L_full": len(full_layers), "state_elems": state}
+            hybrid = {"L_full": min(len(full_layers), L), "state_elems": state}
 
     # ---------- DSA 稀疏注意力 ----------
     # indexer 每步只选 topk 个 token 的 KV 参与注意力
@@ -115,6 +155,18 @@ def normalize(
     I = _first(cfg, ["intermediate_size", "ffn_hidden_size"])
     if I is None and moe:
         I = moe["Ie"]
+
+    # 记录归一化过程中的推断, 供报告做数据质量提示
+    meta = {
+        "tie_inferred": tie_inferred,
+        "d_inferred": d_inferred,
+        "k_inferred": k_inferred,
+        "mla_partial": bool(
+            cfg.get("q_lora_rank")
+            and not cfg.get("kv_lora_rank")
+            and cfg.get("num_key_value_heads", 1) == 1
+        ),
+    }
 
     return {
         "name": name,
@@ -133,6 +185,7 @@ def normalize(
         "mla": mla,
         "hybrid": hybrid,
         "dsa": dsa,
+        "meta": meta,
     }
 
 
@@ -208,12 +261,15 @@ def param_counts(A: dict) -> dict:
         active = total
 
     # ---- embedding & LM head ----
+    # LM head 在每个 decode step 都会被读取, 因此 active 参数必须包含它;
+    # tied embedding 时 head 与 embedding 共享, 不重复计。
     embed_params = h * V
     head_params = h * V
     total += embed_params
     active += embed_params
     if not A["tie"]:
         total += head_params
+        active += head_params
 
     return {
         "total": total,
@@ -223,3 +279,40 @@ def param_counts(A: dict) -> dict:
         "dense_mlp_params": dense_mlp_params,
         "router_params": (h * moe["E"]) if moe else 0,
     }
+
+
+def data_warnings(A: dict, stats: dict) -> list[str]:
+    """对归一化结果做轻量级可信度校验, 在报告中显式提示异常而不是静默展示。"""
+    warnings: list[str] = []
+    name = A.get("name") or ""
+    actual = stats.get("total_params", 0) / 1e9
+
+    # 模型名里的参数量 (如 30B / 0.5B) 与解析值偏差 >35% 时提示
+    m = re.search(r"(?<![A-Za-z0-9.])(\d+(?:\.\d+)?)\s*B(?![A-Za-z])", name)
+    if m and actual > 0:
+        claimed = float(m.group(1))
+        if claimed and (actual > claimed * 1.35 or actual < claimed * 0.70):
+            warnings.append(
+                f"解析参数量 {actual:.1f}B 与模型名标注的 {claimed:g}B 偏差较大"
+                "（可能为近似架构或 config 字段缺失）"
+            )
+
+    moe = A.get("moe")
+    if moe:
+        if moe["K"] > moe["E"]:
+            warnings.append(f"每 token 专家数 K={moe['K']} 大于专家总数 E={moe['E']}")
+        if moe.get("k_inferred"):
+            warnings.append("config 未声明每 token 激活专家数，按 K=2 估算")
+
+    meta = A.get("meta") or {}
+    if meta.get("mla_partial"):
+        warnings.append(
+            "检测到 q_lora/o_lora 但缺少 kv_lora_rank，注意力按 GQA 近似建模，MLA 相关数值可能偏差"
+        )
+
+    if not A.get("V"):
+        warnings.append("缺少 vocab_size，LM Head 与 embedding 未计入")
+    if not A.get("L") or not A.get("H"):
+        warnings.append("缺少层数或注意力头数，架构参数不完整")
+
+    return warnings

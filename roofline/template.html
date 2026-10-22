@@ -81,6 +81,10 @@ tr:hover td{filter:brightness(0.96);}
 svg.chart{width:100%;height:auto;background:#fff;border:1px solid var(--line);border-radius:10px;}
 .chartwrap{position:relative;}
 .methodtable td{text-align:left;}
+.methodtable th{text-align:left;}
+.methodtable th:first-child{width:16%;}
+.methodtable th:nth-child(2){width:40%;}
+.methodtable th:nth-child(3){width:44%;}
 code{background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:12px;}
 .formula{font-family:ui-monospace,Consolas,monospace;font-size:12px;background:#f8fafc;
   border:1px solid var(--line);border-radius:6px;padding:8px 12px;margin:6px 0;overflow-x:auto;}
@@ -124,18 +128,89 @@ a:hover{text-decoration:underline;}
 }
 .ip-reset:hover{background:rgba(255,255,255,.1);}
 .unit{font-size:11px;color:#64748b;}
+
+/* ---------- 矩阵工具栏 / 模型明细 ---------- */
+.matrix-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0 12px;}
+.matrix-toolbar input[type=search]{
+  font-size:13px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;
+  width:240px;background:#fff;color:var(--ink);cursor:text;
+}
+.matrix-toolbar input[type=search]:focus{outline:2px solid #bfdbfe;}
+.matrix-toolbar .spacer{flex:1;}
+.matrix tbody tr{cursor:pointer;}
+.matrix tbody tr.selected td{box-shadow:inset 0 0 0 2px #93c5fd;}
+.matrix tbody tr.selected td.rowhead{background:#dbeafe;}
+.warn{display:inline-block;margin-left:5px;color:#b45309;cursor:help;font-size:12px;}
+.detail-card{margin-top:14px;scroll-margin-top:78px;}
+.detail-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.detail-title{font-size:16px;font-weight:700;}
+.detail-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.detail-actions button{
+  font-size:12px;padding:5px 12px;border:1px solid var(--line);border-radius:7px;
+  background:#fff;color:var(--brand-ink);cursor:pointer;
+}
+.detail-actions button:hover{background:#f8fafc;}
+.detail-stats{display:flex;gap:20px;flex-wrap:wrap;margin:10px 0 4px;font-size:12px;color:var(--muted);}
+.detail-stats b{color:var(--ink);font-size:14px;}
+.detail-table td,.detail-table th{white-space:nowrap;}
+.detail-warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:8px;padding:8px 12px;margin:8px 0;font-size:12px;}
+.detail-warn ul{margin:4px 0 0 18px;padding:0;}
+.scrollhint{font-size:11px;color:var(--muted);margin:6px 0 0;}
+/* ---------- 快速场景 ---------- */
+.ip-presets{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:12px;}
+.ip-presets .lbl{font-size:11px;color:#94a3b8;margin-right:2px;}
+.ip-preset{
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);color:#cbd5e1;
+  padding:5px 10px;border-radius:999px;font-size:11.5px;cursor:pointer;
+}
+.ip-preset:hover{background:rgba(59,130,246,.22);border-color:rgba(59,130,246,.5);color:#fff;}
+.ip-context{
+  margin-top:12px;font-size:12px;color:#cbd5e1;background:rgba(148,163,184,.1);
+  border:1px dashed rgba(148,163,184,.35);border-radius:8px;padding:8px 12px;
+}
+#input-panel.hidden{display:none;}
+/* ---------- toast ---------- */
+#toast{
+  position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(10px);
+  background:#0f172a;color:#fff;padding:9px 16px;border-radius:9px;font-size:12.5px;
+  opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;z-index:200;
+  box-shadow:0 6px 22px rgba(15,23,42,.3);
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+#tabs button:focus-visible,button:focus-visible,select:focus-visible,
+input:focus-visible,a:focus-visible{outline:2px solid #93c5fd;outline-offset:2px;}
+/* ---------- 架构总表可读性 ---------- */
+.arch th,.arch td{white-space:normal;}
+.arch td:nth-child(2),.arch td:nth-child(3),.arch td:nth-child(4),
+.arch td:nth-child(5),.arch td:nth-child(6),.arch td:nth-child(7),
+.arch td:nth-child(8){white-space:nowrap;}
+.arch .fit-yes{color:#047857;font-weight:600;}
+.arch .fit-no{color:#b45309;font-weight:600;}
+.no-data h2{margin-top:0;}
+@media (max-width:760px){
+  .wrap{padding:0 12px;}
+  h1{font-size:16px;}
+  h1 .sub{display:none;}
+  #tabs button{padding:8px 10px;font-size:12.5px;}
+  #input-panel{padding:14px 14px;}
+  .matrix-toolbar input[type=search]{width:100%;}
+  .ip-field{width:100%;}
+  #input-panel input.num,#input-panel select{width:100%;}
+  .kpi{min-width:120px;}
+  .detail-stats{gap:12px;}
+}
 </style>
 </head>
 <body>
 <header>
   <div class="wrap header-row">
     <h1>大模型推理算力强度分析<span class="sub">FLOP/B · Roofline 视角 · 数据源 ModelScope</span></h1>
-    <nav id="tabs">
-      <button data-tab="overview" class="active">总览矩阵</button>
-      <button data-tab="curves">强度曲线</button>
-      <button data-tab="roofline">Roofline 图</button>
-      <button data-tab="arch">架构总表</button>
-      <button data-tab="method">方法论</button>
+    <nav id="tabs" role="tablist" aria-label="报告视图">
+      <button type="button" role="tab" aria-selected="true" aria-controls="tab-overview" data-tab="overview" class="active">总览矩阵</button>
+      <button type="button" role="tab" aria-selected="false" aria-controls="tab-curves" data-tab="curves">强度曲线</button>
+      <button type="button" role="tab" aria-selected="false" aria-controls="tab-roofline" data-tab="roofline">Roofline 图</button>
+      <button type="button" role="tab" aria-selected="false" aria-controls="tab-arch" data-tab="arch">架构总表</button>
+      <button type="button" role="tab" aria-selected="false" aria-controls="tab-method" data-tab="method">方法论</button>
     </nav>
   </div>
 </header>
@@ -147,15 +222,15 @@ a:hover{text-decoration:underline;}
 <!-- ============================================================ -->
 <section id="input-panel">
   <h2>输入区 · 推理场景配置</h2>
-  <p class="hint">所有图表根据这里的参数实时计算。Prefill（预填充）处理整段提示词，是 GEMM 密集计算；
-  Decode（解码）逐 token 生成，每步需读全部 KV 缓存，两者算力强度相差 2–3 个数量级。</p>
+  <p class="hint">总览矩阵、强度曲线与 Roofline 图会随这里的参数实时重算。Prefill（预填充）处理整段提示词，
+  是 GEMM 密集计算；Decode（解码）逐 token 生成，每步需读全部 KV 缓存，两者算力强度相差 2–3 个数量级。</p>
 
-  <div class="ip-row">
+  <div class="ip-row" id="ip-scenario-fields">
     <div class="ip-field">
       <label>推理阶段</label>
       <div class="seg" id="phase-seg">
-        <button data-phase="prefill">Prefill 预填充</button>
-        <button data-phase="decode" class="active">Decode 解码</button>
+        <button type="button" data-phase="prefill" aria-pressed="false">Prefill 预填充</button>
+        <button type="button" data-phase="decode" class="active" aria-pressed="true">Decode 解码</button>
       </div>
     </div>
 
@@ -177,20 +252,52 @@ a:hover{text-decoration:underline;}
 
     <div class="ip-field">
       <label>&nbsp;</label>
-      <button class="ip-reset" id="ip-reset">重置默认</button>
+      <button type="button" class="ip-reset" id="ip-reset">重置默认</button>
+    </div>
+    <div class="ip-field">
+      <label>&nbsp;</label>
+      <button type="button" class="ip-reset" id="ip-copy">复制当前视图链接</button>
     </div>
   </div>
 
-  <div class="ip-summary" id="ip-summary"></div>
+  <div class="ip-presets" id="ip-presets">
+    <span class="lbl">快速场景</span>
+    <button type="button" class="ip-preset" data-preset="chat">单用户解码 B=1</button>
+    <button type="button" class="ip-preset" data-preset="batch">批量解码 B=32</button>
+    <button type="button" class="ip-preset" data-preset="long">长上下文 32K</button>
+    <button type="button" class="ip-preset" data-preset="prefill">预填充 8K</button>
+  </div>
+
+  <div class="ip-context" id="ip-context" style="display:none;"></div>
+  <div class="ip-summary" id="ip-summary" aria-live="polite"></div>
 </section>
 
 <!-- ================= 总览矩阵 ================= -->
-<section id="tab-overview" class="tab active">
+<section id="tab-overview" class="tab active" role="tabpanel">
   <div class="card">
     <p><b>算力强度 (Arithmetic Intensity, FLOP/B)</b> = 阶段 FLOPs ÷ 阶段 DRAM 访存量。
     Roofline 模型中，性能上限 = min(峰值算力, 带宽 × 强度)。GPU 的<b>脊点 (ridge point)</b>一般在
     100–300 FLOP/B（如 H100 BF16 ≈ 295），低于脊点即<b>访存受限</b>。</p>
-    <p class="muted small">悬停单元格查看阶段说明与精确值。切换 预填充/解码 观察两个推理阶段的巨大差异。</p>
+    <p class="muted small">悬停单元格查看阶段说明与精确值；点击任意模型行查看该模型在当前场景下的
+    FLOPs / 访存 / 阶段占比明细。嵌入查表是纯访存阶段（FLOPs≈0），表中以“—”显示，不参与对数坐标图。</p>
+    <p class="muted small"><b>阅读提示：</b>Decode B=1 时整体强度都接近 1 FLOP/B（权重读取主导），
+    各模型差异主要体现在注意力阶段；用输入区的“快速场景”切到批量解码或预填充，才能看出架构差异。</p>
+  </div>
+
+  <div class="matrix-toolbar">
+    <input type="search" id="matrix-search" placeholder="搜索模型 / 家族 / 备注…" aria-label="搜索模型">
+    <select id="matrix-family" aria-label="按家族筛选"><option value="">全部家族</option></select>
+    <select id="matrix-sort" aria-label="排序方式">
+      <option value="default">默认顺序</option>
+      <option value="total-desc">整体强度 高→低</option>
+      <option value="total-asc">整体强度 低→高</option>
+      <option value="params-desc">总参数 大→小</option>
+      <option value="params-asc">总参数 小→大</option>
+      <option value="name">模型名称</option>
+    </select>
+    <span class="spacer"></span>
+    <span id="matrix-count" class="muted small"></span>
+    <button type="button" class="btn" id="matrix-export">导出 CSV</button>
   </div>
 
   <div class="tablewrap">
@@ -201,10 +308,12 @@ a:hover{text-decoration:underline;}
     <span>低 (访存受限)</span><span class="bar"></span><span>高 (算力受限)</span>
     <span class="small">色阶: 0.4 → 2000 FLOP/B (对数)</span>
   </div>
+
+  <div id="matrix-detail"></div>
 </section>
 
 <!-- ================= 强度曲线 ================= -->
-<section id="tab-curves" class="tab">
+<section id="tab-curves" class="tab" role="tabpanel">
   <div class="card">
     <p>各阶段算力强度随<b>解码批量 B</b>（解码阶段）或<b>提示词长度 S</b>（预填充阶段）的变化。
     GEMV/GEMM 类阶段强度近似线性于批量；注意力核心强度与批量基本无关。</p>
@@ -214,11 +323,12 @@ a:hover{text-decoration:underline;}
   </div>
   <div class="chartwrap"><div id="curves-chart"></div></div>
   <div class="stagelegend" id="curves-legend"></div>
+  <p class="small muted">嵌入查表是纯访存阶段（FLOPs≈0），不在对数坐标图中显示；其访存量已计入“整体”。</p>
   <div id="curves-table"></div>
 </section>
 
 <!-- ================= Roofline ================= -->
-<section id="tab-roofline" class="tab">
+<section id="tab-roofline" class="tab" role="tabpanel">
   <div class="card">
     <p><b>Roofline 图</b>：横轴 = 算力强度 (FLOP/B, 对数)，纵轴 = 可达算力 (FLOPS, 对数)。
     每个点是一个推理阶段，落在所选 GPU 的屋顶线 (roofline) 上：位于斜线段 = 访存受限，位于水平段 = 算力受限。</p>
@@ -228,14 +338,19 @@ a:hover{text-decoration:underline;}
     <label>GPU</label><select id="roof-device"></select>
   </div>
   <div class="chartwrap"><div id="roof-chart"></div></div>
+  <p class="small muted">嵌入查表为纯访存阶段（FLOPs≈0），无法在对数坐标上表示，因此不绘制；其访存量仍计入“整体”点。
+  图中屋顶线为 BF16 稠密算力与 HBM 带宽的理想上界。</p>
   <div id="roof-takeaway" class="card"></div>
 </section>
 
 <!-- ================= 架构总表 ================= -->
-<section id="tab-arch" class="tab">
+<section id="tab-arch" class="tab" role="tabpanel">
   <div class="card">
     <p>从 ModelScope 爬取的 config.json 汇总的架构参数（BF16 统一口径）。
-    <b>每 token 流量</b> = 单 token 解码一步所需读写的 DRAM 字节数（含权重、KV 缓存与激活）。</p>
+    <b>每 token 流量</b> = 单 token 解码一步所需读写的 DRAM 字节数（含权重、KV 缓存与激活），
+    固定取 decode B=1、KV 长度 2048。</p>
+    <p class="small muted">“单卡适配”只比较 BF16 权重与所选 GPU 显存；未计 KV 缓存、激活、框架开销与张量并行通信。
+    权重放不下单卡时，表中给出“需 N 卡”并隐藏单卡 tok/s 上界，避免把不可部署的配置当成可达到的性能。</p>
   </div>
   <div class="controls">
     <label>理论 decode 上限基准 GPU</label>
@@ -243,10 +358,11 @@ a:hover{text-decoration:underline;}
     <span id="arch-bw" class="muted small"></span>
   </div>
   <div class="tablewrap"><div id="arch-table"></div></div>
+  <p class="scrollhint">表格可横向滚动；第一列固定。模型名旁的 ⚠ 表示 config 解析存在需要留意的假设。</p>
 </section>
 
 <!-- ================= 方法论 ================= -->
-<section id="tab-method" class="tab">
+<section id="tab-method" class="tab" role="tabpanel">
   <div class="card">
     <h2>阶段划分与计算模型</h2>
     <p>所有公式按 BF16 权重 (2 B/参数)、BF16 激活 (2 B/元素)、BF16 KV 缓存统一口径计算，便于跨模型公平比较。</p>
@@ -256,19 +372,20 @@ a:hover{text-decoration:underline;}
         <tbody>
           <tr><td>嵌入查表</td><td>0</td><td>B·h·4（读权重行 + 写激活）</td></tr>
           <tr><td>QKV 投影</td><td>2·P<sub>qkv</sub>·B·L</td><td>P<sub>qkv</sub>·2·L + B·L·(h + q_out)</td></tr>
-          <tr><td>注意力核心 (prefill)</td><td>2·B·H·d·S²·L（causal ×0.5）</td><td>B·S·2·(2H + 2KVH)·d·L（Flash: Q/K/V 读 + O 写）</td></tr>
-          <tr><td>注意力核心 (decode)</td><td>4·B·H·d·S·L</td><td>(2·B·KVH·d·S·2 + 2·B·H·d·2)·L（每步全量读 KV）</td></tr>
+          <tr><td>注意力核心 (prefill)</td><td>4·B·H·d·S²·L（causal ×0.5 → 2·B·H·d·S²·L）</td><td>B·S·2·(2H + 2KVH)·d·L（Flash: Q/K/V 读 + O 写）</td></tr>
+          <tr><td>注意力核心 (decode)</td><td>4·B·H·d·S·L（QK<sup>T</sup> + AV）</td><td>(2·B·KVH·d·S·2 + 2·B·H·d·2)·L（每步全量读 KV）</td></tr>
           <tr><td>O 投影</td><td>2·P<sub>o</sub>·B·L</td><td>P<sub>o</sub>·2·L + B·L·(o_in + h)</td></tr>
           <tr><td>MLP (dense)</td><td>6·h·I·B·L</td><td>3·h·I·2·L + B·2·(2h + 3I)·L</td></tr>
           <tr><td>MLP (MoE)</td><td>6·K·h·I<sub>e</sub>·B·L<sub>moe</sub></td><td>n<sub>active</sub>·3·h·I<sub>e</sub>·2·L<sub>moe</sub> + 激活</td></tr>
           <tr><td>MoE 路由</td><td>≈2·h·E·B·L<sub>moe</sub></td><td>h·E·2·L<sub>moe</sub> + B·E·2·L<sub>moe</sub></td></tr>
           <tr><td>LM Head</td><td>2·h·V·B</td><td>h·V·2 + B·V·2·2 + B·h·2</td></tr>
-          <tr><td>元素级/归一化</td><td>≈12·h + 6·(H+KVH)·d + 6·I（每 token 每层）</td><td>≈2·(10·h + 2·(H+KVH)·d + 3·I)（读+写各一次）</td></tr>
+          <tr><td>元素级/归一化</td><td>≈12·h + 4·(H+KVH)·d + 5·I（每 token 每层）</td><td>≈2·(10·h + 2·(H+KVH)·d + 3·I)（读+写各一次）</td></tr>
         </tbody>
       </table>
     </div>
     <p class="small muted">符号：h=hidden，L=层数，H=头数，KVH=KV 头数，d=head_dim，I=FFN 维度，V=词表，
-2    B=批量，S=序列长度，P=参数量，E=专家数，K=每 token 激活专家数，I<sub>e</sub>=专家 FFN 维度，L<sub>moe</sub>=MoE 层数。</p>
+    B=批量，S=序列长度，P=参数量，E=专家数，K=每 token 激活专家数，I<sub>e</sub>=专家 FFN 维度，L<sub>moe</sub>=MoE 层数。
+    MLA 模型的注意力按 (nope+rope) 与 v_head_dim 计，元素级阶段中的 (H+KVH)·d 相应替换为 MLA 的实际维度。</p>
 
     <h2>关键假设</h2>
     <ul>
@@ -276,7 +393,19 @@ a:hover{text-decoration:underline;}
       <li><b>激活读/写一次</b>：每个阶段的输入激活读一次、输出写一次，阶段之间不重复计数。</li>
       <li><b>MLA 近似</b>：DeepSeek-V3/R1、GLM-4.5、Kimi-K2 的 MLA 注意力按 (nope+rope) 与 v_head_dim 维度建模，KV 缓存按压缩后 (kv_lora_rank + rope) 计。</li>
       <li><b>MoE decode</b>：每步激活 n<sub>active</sub> = min(E, B×K) 个专家，激活专家的权重各读一次。</li>
+      <li><b>激活参数</b>：包含注意力、MLP/激活专家、embedding 与 LM head；tied embedding 不重复计 LM head。</li>
       <li><b>GPU 峰值</b>：BF16/FP16 稠密张量核算力与 HBM 带宽（公开规格，四舍五入）。</li>
+    </ul>
+
+    <h2>数据口径与自动校验</h2>
+    <ul>
+      <li>MoE 的每 token 专家数优先读取 <code>num_experts_per_tok</code> / <code>num_experts_per_token</code>，
+      不会把采样参数 <code>top_k</code> 误当成专家数；专家 FFN 维度优先读取
+      <code>expert_hidden_dim</code> / <code>routed_expert_hidden_size</code>。</li>
+      <li>Qwen3.5/Holo3 等只声明 <code>shared_expert_intermediate_size</code> 的模型，按 1 个共享专家估算。</li>
+      <li>报告会检查“解析参数量 vs 模型名标注”“K &gt; E”“缺少 MLA 关键字段”等异常，并在模型名旁以
+      <span class="warn">⚠</span> 提示；这些是解析口径风险，不代表模型本身有问题。</li>
+      <li>“理论 decode 上限”仅在 BF16 权重可放入单卡显存时给出；否则显示“需 N 卡”，避免把多卡模型误读为单卡可达性能。</li>
     </ul>
 
     <h2>局限性</h2>
@@ -285,6 +414,7 @@ a:hover{text-decoration:underline;}
       <li>滑动窗口注意力 (Mistral/Gemma-2) 与因果掩码按简化方式处理；超长上下文 (S &gt; 32k) 下注意力核心的强度估计偏保守。</li>
       <li>元素级/归一化阶段的 FLOPs 与访存为量级估算，非逐算子精确定义。</li>
       <li>理论 decode 上限 (tok/s) = 带宽 ÷ 每 token 流量，为理想上界，实际通常低 30–60%。</li>
+      <li>混合线性注意力 (GDN/KDA) 与 DeepSeek-V4 的新式注意力仍按阶段做近似，DSA 的 indexer 开销未单独计入。</li>
     </ul>
   </div>
 </section>
@@ -298,19 +428,28 @@ a:hover{text-decoration:underline;}
   </div>
 </footer>
 
+<div id="toast" role="status" aria-live="polite"></div>
+
 <script>
 'use strict';
 const DATA = /*__DATA__*/null;
 
 // ---------- state ----------
-const state = {
+const DEFAULT_STATE = {
+  tab: 'overview',
   phase: 'decode',
   prefillS: 2048,
   decodeB: 1,
   decodeS: 2048,
-  modelId: DATA.models.length ? DATA.models[Math.min(3, DATA.models.length-1)].id : null,
-  deviceId: 'h100'
+  modelId: (DATA && DATA.models && DATA.models.length)
+    ? DATA.models[Math.min(3, DATA.models.length - 1)].id
+    : null,
+  deviceId: 'h100',
+  matrixQuery: '',
+  matrixFamily: '',
+  matrixSort: 'default'
 };
+const state = Object.assign({}, DEFAULT_STATE);
 
 const STAGE_COLORS = {
   embed:   '#94a3b8',
@@ -329,6 +468,33 @@ const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+function hasData(){
+  return !!(DATA && Array.isArray(DATA.models) && DATA.models.length);
+}
+function fmtDim(v){
+  if (v == null || !isFinite(v)) return '—';
+  return Math.abs(v - Math.round(v)) < 1e-6 ? String(Math.round(v)) : v.toFixed(1);
+}
+function fmtPct(v){
+  if (v == null || !isFinite(v)) return '—';
+  if (v > 0 && v < 0.01) return '<0.01%';
+  if (v >= 10) return v.toFixed(1) + '%';
+  return v.toFixed(2) + '%';
+}
+function toast(msg){
+  const el = $('#toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove('show'), 1800);
+}
+function clampInt(v, min, max, fallback){
+  const n = parseInt(v, 10);
+  if (!isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+
 function fmtI(v){
   if (v == null || !isFinite(v)) return '—';
   if (v >= 1000) return Math.round(v).toLocaleString('en-US');
@@ -339,6 +505,7 @@ function fmtI(v){
 }
 function fmtBytes(v){
   if (v == null || !isFinite(v)) return '—';
+  if (v === 0) return '0 B';
   if (v >= 1e12) return (v/1e12).toFixed(2) + ' TB';
   if (v >= 1e9)  return (v/1e9).toFixed(2) + ' GB';
   if (v >= 1e6)  return (v/1e6).toFixed(1) + ' MB';
@@ -346,10 +513,14 @@ function fmtBytes(v){
   return v.toFixed(0) + ' B';
 }
 function fmtFLOPS(v){
+  if (v == null || !isFinite(v)) return '—';
+  if (v === 0) return '0';
   if (v >= 1e15) return (v/1e15).toFixed(2) + ' PFLOPS';
   if (v >= 1e12) return (v/1e12).toFixed(v >= 1e13 ? 0 : 1) + ' TFLOPS';
   if (v >= 1e9)  return (v/1e9).toFixed(0) + ' GFLOPS';
-  return v.toExponential(0);
+  if (v >= 1e6)  return (v/1e6).toFixed(v >= 1e7 ? 0 : 1) + ' MFLOPS';
+  if (v >= 1e3)  return (v/1e3).toFixed(0) + ' KFLOPS';
+  return v.toFixed(0) + ' FLOPS';
 }
 function fmtParams(v){
   if (v >= 1e12) return (v/1e12).toFixed(2) + 'T';
@@ -439,8 +610,8 @@ function computeStagesJS(A, phase, B, S){
   // ---- 3. 注意力核心 ----
   let attn_flops, attn_bytes;
   if (phase === 'prefill'){
-    // 完整注意力层: causal ×0.5
-    attn_flops = B * H * qk_pair * S * S * 0.5 * L_full;
+    // 完整注意力层: QK^T 与 AV 各 2·d FLOPs/对, causal ×0.5
+    attn_flops = 2 * B * H * qk_pair * S * S * 0.5 * L_full;
     if (mla){
       attn_bytes = (B * S * H * (mla.nope_d + mla.rope_d) * AB
                   + B * S * H * mla.nope_d * AB
@@ -455,11 +626,12 @@ function computeStagesJS(A, phase, B, S){
       attn_bytes += B * se * KVB * 2 * L_lin;
     }
   } else {
-    // decode: 每步对 min(topk, S) 个 KV 做一次 QK^T + AV
+    // decode: 每步对 min(topk, S) 个 KV 做一次 QK^T + AV (各 2·d)
     const S_eff = dsa ? Math.min(dsa.topk, S) : S;
-    attn_flops = B * H * qk_pair * S_eff * L_full;
+    attn_flops = 2 * B * H * qk_pair * S_eff * L_full;
     if (mla){
-      attn_bytes = (B * kv_cache_elems * KVB + B * H * (mla.nope_d + mla.rope_d) * AB
+      attn_bytes = (B * S_eff * kv_cache_elems * KVB
+                  + B * H * (mla.nope_d + mla.rope_d) * AB
                   + B * H * mla.v_d * AB) * L_full;
     } else {
       attn_bytes = (2 * B * KVH * A.d * S_eff * KVB + 2 * B * H * A.d * AB) * L_full;
@@ -578,33 +750,247 @@ function stagesFor(m){
   return getStages(m, 'decode', state.decodeB, state.decodeS);
 }
 
+// ---------- 场景 / URL / 标签页 ----------
+const VALID_TABS = ['overview', 'curves', 'roofline', 'arch', 'method'];
+const VALID_SORTS = ['default', 'total-desc', 'total-asc', 'params-desc', 'params-asc', 'name'];
+
+function readHash(){
+  if (!hasData() || !location.hash || location.hash === '#') return;
+  const p = new URLSearchParams(location.hash.slice(1));
+  state.matrixSort = 'default';
+  state.matrixQuery = '';
+  state.matrixFamily = '';
+  const phase = p.get('phase');
+  if (phase === 'prefill' || phase === 'decode') state.phase = phase;
+  state.prefillS = clampInt(p.get('ps'), 1, 1000000, state.prefillS);
+  state.decodeB = clampInt(p.get('b'), 1, 1024, state.decodeB);
+  state.decodeS = clampInt(p.get('s'), 1, 1000000, state.decodeS);
+  const tab = p.get('tab');
+  if (VALID_TABS.includes(tab)) state.tab = tab;
+  const model = p.get('model');
+  if (model && DATA.models.some(m => m.id === model)) state.modelId = model;
+  const dev = p.get('dev');
+  if (dev && (DATA.devices || []).some(d => d.id === dev)) state.deviceId = dev;
+  const sort = p.get('sort');
+  if (VALID_SORTS.includes(sort)) state.matrixSort = sort;
+  state.matrixQuery = p.get('q') || '';
+  const fam = p.get('fam') || '';
+  const families = Array.from(new Set(DATA.models.map(m => m.family)));
+  state.matrixFamily = families.includes(fam) ? fam : '';
+}
+
+function writeHash(){
+  if (!hasData()) return;
+  const p = new URLSearchParams();
+  p.set('tab', state.tab);
+  p.set('phase', state.phase);
+  p.set('ps', state.prefillS);
+  p.set('b', state.decodeB);
+  p.set('s', state.decodeS);
+  if (state.modelId) p.set('model', state.modelId);
+  p.set('dev', state.deviceId);
+  if (state.matrixSort !== 'default') p.set('sort', state.matrixSort);
+  if (state.matrixQuery) p.set('q', state.matrixQuery);
+  if (state.matrixFamily) p.set('fam', state.matrixFamily);
+  try {
+    history.replaceState(null, '', '#' + p.toString());
+  } catch (e) {
+    location.hash = p.toString();
+  }
+}
+
+function switchTab(tab, scroll = true){
+  if (!VALID_TABS.includes(tab)) tab = 'overview';
+  state.tab = tab;
+  $$('#tabs button').forEach(b => {
+    const on = b.dataset.tab === tab;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  $$('.tab').forEach(t => t.classList.toggle('active', t.id === 'tab-' + tab));
+  syncInputUI();
+  if (scroll) window.scrollTo({ top: 0, behavior: 'auto' });
+  writeHash();
+}
+
+function syncToolbar(){
+  if (!hasData()) return;
+  $('#matrix-search').value = state.matrixQuery;
+  $('#matrix-family').value = state.matrixFamily;
+  $('#matrix-sort').value = state.matrixSort;
+}
+
+function syncNumberInputs(){
+  $('#prefill-s').value = state.prefillS;
+  $('#decode-b').value = state.decodeB;
+  $('#decode-s').value = state.decodeS;
+}
+
+function syncModelSelects(){
+  if (!state.modelId) return;
+  const c = $('#curves-model'), r = $('#roof-model');
+  if (c) c.value = state.modelId;
+  if (r) r.value = state.modelId;
+}
+
 // ---------- 渲染: 总览矩阵 ----------
+function filteredModels(){
+  if (!hasData()) return [];
+  const q = state.matrixQuery.trim().toLowerCase();
+  let arr = DATA.models.filter(m => {
+    if (state.matrixFamily && m.family !== state.matrixFamily) return false;
+    if (!q) return true;
+    return (m.name + ' ' + m.family + ' ' + (m.note || '')).toLowerCase().includes(q);
+  });
+  const totalI = m => stagesFor(m).total.intensity || 0;
+  switch (state.matrixSort){
+    case 'total-desc': arr = arr.slice().sort((a, b) => totalI(b) - totalI(a)); break;
+    case 'total-asc':  arr = arr.slice().sort((a, b) => totalI(a) - totalI(b)); break;
+    case 'params-desc':arr = arr.slice().sort((a, b) => b.stats.total_params - a.stats.total_params); break;
+    case 'params-asc': arr = arr.slice().sort((a, b) => a.stats.total_params - b.stats.total_params); break;
+    case 'name':       arr = arr.slice().sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN')); break;
+  }
+  return arr;
+}
+
+function warnBadge(m){
+  if (!m.warnings || !m.warnings.length) return '';
+  return `<span class="warn" title="${esc(m.warnings.join('；'))}">⚠</span>`;
+}
+
 function renderMatrix(){
   const stageIds = DATA.stages.map(s => s.id);
-  let html = '<table class="matrix"><thead><tr><th class="rowhead">模型</th>';
-  for (const st of DATA.stages) html += `<th title="${esc(st.desc)}">${esc(st.name)}</th>`;
-  html += '<th class="total">整体</th></tr></thead><tbody>';
-  for (const m of DATA.models){
+  const models = filteredModels();
+  let html = '<table class="matrix"><thead><tr><th class="rowhead" scope="col">模型</th>';
+  for (const st of DATA.stages) html += `<th scope="col" title="${esc(st.desc)}">${esc(st.name)}</th>`;
+  html += '<th class="total" scope="col">整体</th></tr></thead><tbody>';
+  for (const m of models){
     const cell = stagesFor(m);
-    html += `<tr><td class="rowhead"><div class="mname">${esc(m.name)}</div><div class="msub">${esc(m.note||'')}</div></td>`;
+    const selected = m.id === state.modelId;
+    html += `<tr data-model-id="${esc(m.id)}"${selected ? ' class="selected"' : ''}>` +
+      `<td class="rowhead"><div class="mname">${esc(m.name)}${warnBadge(m)}</div>` +
+      `<div class="msub">${esc(m.note || '')}</div></td>`;
     for (const sid of stageIds){
       const s = cell[sid];
       const v = s ? s.intensity : null;
       const st = DATA.stages.find(x => x.id === sid);
-      html += `<td style="${heatStyle(v)}" title="${esc(st.name)}: ${v==null?'—':fmtI(v)+' FLOP/B'}">${v==null?'—':fmtI(v)}</td>`;
+      const zero = v != null && Math.abs(v) < 1e-12;
+      const text = v == null || zero ? '—' : fmtI(v);
+      const title = zero
+        ? `${st.name}: 纯访存阶段（FLOPs≈0），强度为 0`
+        : (v == null ? `${st.name}: 不适用` : `${st.name}: ${fmtI(v)} FLOP/B`);
+      html += `<td style="${heatStyle(v)}" title="${esc(title)}">${text}</td>`;
     }
     const t = cell.total.intensity;
     html += `<td class="total" style="${heatStyle(t)}" title="整体: ${fmtI(t)} FLOP/B">${fmtI(t)}</td></tr>`;
   }
   html += '</tbody></table>';
-  $('#matrix').innerHTML = html;
+  $('#matrix').innerHTML = models.length ? html : '<p class="muted" style="padding:18px;">没有匹配的模型，试试清空搜索或切换家族。</p>';
+  $('#matrix-count').textContent = `显示 ${models.length} / ${DATA.models.length} 个模型`;
+  // 过滤后如果当前选中模型不在结果里, 不展示无关的明细
+  if (models.some(m => m.id === state.modelId)) renderModelDetail();
+  else $('#matrix-detail').innerHTML = '';
+}
+
+function renderModelDetail(){
+  const el = $('#matrix-detail');
+  if (!el) return;
+  const m = DATA.models.find(x => x.id === state.modelId);
+  if (!m){ el.innerHTML = ''; return; }
+  const cell = stagesFor(m);
+  const total = cell.total;
+  const weightBytes = (m.stats && m.stats.weight_bytes) || m.stats.total_params * 2;
+  const scenario = state.phase === 'prefill'
+    ? `Prefill · S=${state.prefillS.toLocaleString('en-US')}`
+    : `Decode · B=${state.decodeB} · KV=${state.decodeS.toLocaleString('en-US')}`;
+
+  let html = `<div class="card detail-card">
+    <div class="detail-head">
+      <div>
+        <div class="detail-title">${esc(m.name)} <span class="muted small">${esc(m.family)}</span>${warnBadge(m)}</div>
+        <div class="small muted">${esc(m.note || '')} · <a href="${esc(m.url)}" target="_blank" rel="noopener">ModelScope ↗</a></div>
+      </div>
+      <div class="detail-actions">
+        <button type="button" data-go="curves">查看强度曲线</button>
+        <button type="button" data-go="roofline">查看 Roofline</button>
+      </div>
+    </div>`;
+  if (m.warnings && m.warnings.length){
+    html += `<div class="detail-warn"><b>数据校验提示</b><ul>` +
+      m.warnings.map(w => `<li>${esc(w)}</li>`).join('') + `</ul></div>`;
+  }
+  html += `<div class="detail-stats">
+    <span>总参数 <b>${fmtParams(m.stats.total_params)}</b></span>
+    <span>激活参数/token <b>${fmtParams(m.stats.active_params)}</b></span>
+    <span>BF16 权重 <b>${fmtBytes(weightBytes)}</b></span>
+    <span>每 token 流量 <b>${fmtBytes(m.stats.bytes_per_token)}</b></span>
+    <span>整体强度 <b>${fmtI(total.intensity)} FLOP/B</b></span>
+  </div>`;
+  html += `<div class="tablewrap"><table class="detail-table"><thead><tr>
+    <th scope="col">阶段</th><th scope="col">FLOPs</th><th scope="col">访存</th><th scope="col">强度 (FLOP/B)</th>
+    <th scope="col">FLOPs 占比</th><th scope="col">访存占比</th>
+  </tr></thead><tbody>`;
+  for (const sid of DATA.stages.map(s => s.id)){
+    const s = cell[sid];
+    if (!s) continue;
+    const st = DATA.stages.find(x => x.id === sid);
+    const shareF = total.flops > 0 ? s.flops / total.flops * 100 : 0;
+    const shareB = total.bytes > 0 ? s.bytes / total.bytes * 100 : 0;
+    const inten = Math.abs(s.intensity) < 1e-12 ? '纯访存' : fmtI(s.intensity);
+    html += `<tr><td>${esc(st.name)}</td><td>${fmtFLOPS(s.flops)}</td><td>${fmtBytes(s.bytes)}</td>` +
+      `<td>${inten}</td><td>${fmtPct(shareF)}</td><td>${fmtPct(shareB)}</td></tr>`;
+  }
+  html += `<tr><td><b>整体</b></td><td><b>${fmtFLOPS(total.flops)}</b></td><td><b>${fmtBytes(total.bytes)}</b></td>` +
+    `<td><b>${fmtI(total.intensity)}</b></td><td>100%</td><td>100%</td></tr>`;
+  html += `</tbody></table></div>
+    <p class="small muted" style="margin:10px 0 0;">场景：${esc(scenario)}。整体强度 = ΣFLOPs ÷ ΣBytes，
+    不是各阶段强度的算术平均；因此高 FLOPs 阶段（如 MLP）会主导整体值。</p>
+  </div>`;
+  el.innerHTML = html;
+}
+
+function exportMatrixCSV(){
+  if (!hasData()) return;
+  const stageIds = DATA.stages.map(s => s.id);
+  const head = ['模型', '家族', '备注', ...DATA.stages.map(s => s.name), '整体强度'];
+  const rows = [head];
+  for (const m of filteredModels()){
+    const cell = stagesFor(m);
+    rows.push([
+      m.name, m.family, m.note || '',
+      ...stageIds.map(sid => {
+        const s = cell[sid];
+        return s && Math.abs(s.intensity) >= 1e-12 ? s.intensity : '';
+      }),
+      cell.total.intensity
+    ]);
+  }
+  const csvCell = v => {
+    const s = String(v == null ? '' : v);
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const csv = '\ufeff' + rows.map(r => r.map(csvCell).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `roofline_matrix_${state.phase}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast('已导出当前筛选/排序后的矩阵 CSV');
 }
 
 // ---------- 渲染: 强度曲线 ----------
 function renderCurves(){
   const wrap = $('#curves-chart');
   const m = DATA.models.find(x => x.id === state.modelId);
-  if (!m){ wrap.innerHTML = ''; return; }
+  if (!m){
+    wrap.innerHTML = '';
+    $('#curves-legend').innerHTML = '';
+    $('#curves-table').innerHTML = '';
+    return;
+  }
   const phase = state.phase;
   // 扫描范围: prefill 扫 S, decode 扫 B (其余参数取输入区当前值)
   const xs = phase === 'prefill'
@@ -629,7 +1015,12 @@ function renderCurves(){
       series.push({ sid, pts, label: DATA.stages.find(s => s.id === sid).name });
     }
   }
-  if (!series.length){ wrap.innerHTML = '<p class="muted">无数据</p>'; return; }
+  if (!series.length){
+    wrap.innerHTML = '<p class="muted">无数据</p>';
+    $('#curves-legend').innerHTML = '';
+    $('#curves-table').innerHTML = '';
+    return;
+  }
   ymin = Math.max(ymin * 0.5, 0.01);
   ymax = ymax * 2;
 
@@ -637,7 +1028,8 @@ function renderCurves(){
   const X = v => ML + (Math.log10(v) - Math.log10(xs[0])) / (Math.log10(xs[xs.length-1]) - Math.log10(xs[0])) * (W - ML - MR);
   const Y = v => H - MB - (Math.log10(v) - Math.log10(ymin)) / (Math.log10(ymax) - Math.log10(ymin)) * (H - MT - MB);
 
-  const svg = svgEl('svg', {viewBox: `0 0 ${W} ${H}`, class: 'chart'});
+  const svg = svgEl('svg', {viewBox: `0 0 ${W} ${H}`, class: 'chart', role: 'img',
+    'aria-label': `${m.name} 各阶段算力强度随 ${phase === 'prefill' ? '提示词长度' : '解码批量'} 的变化`});
 
   // y gridlines
   for (let p = Math.floor(Math.log10(ymin)); p <= Math.ceil(Math.log10(ymax)); p++){
@@ -712,7 +1104,7 @@ function renderCurves(){
 
   // 当前输入值标记线
   const curX = phase === 'prefill' ? state.prefillS : state.decodeB;
-  if (curX >= xs[0] && curX <= xs[xs.length-1]){
+  if (curX >= xs[0] && curX <= xs[xs.length - 1]){
     const gx = X(curX);
     svg.appendChild(svgEl('line', {x1: gx, y1: MT, x2: gx, y2: H - MB, stroke: '#dc2626',
       'stroke-width': 1.5, 'stroke-dasharray': '4 3'}));
@@ -738,7 +1130,8 @@ function renderCurves(){
     const st = DATA.stages.find(x => x.id === sid);
     const s = cell[sid];
     if (!s) continue;
-    th += `<tr><td>${esc(st.name)}</td><td>${fmtI(s.intensity)}</td></tr>`;
+    const inten = Math.abs(s.intensity) < 1e-12 ? '纯访存' : fmtI(s.intensity);
+    th += `<tr><td>${esc(st.name)}</td><td>${inten}</td></tr>`;
   }
   th += `<tr><td><b>整体</b></td><td><b>${fmtI(cell.total.intensity)}</b></td></tr>`;
   th += '</tbody></table>';
@@ -750,7 +1143,7 @@ function renderRoofline(){
   const wrap = $('#roof-chart');
   const m = DATA.models.find(x => x.id === state.modelId);
   const dev = DATA.devices.find(d => d.id === state.deviceId) || DATA.devices[0];
-  if (!m){ wrap.innerHTML = ''; return; }
+  if (!m){ wrap.innerHTML = ''; $('#roof-takeaway').innerHTML = ''; return; }
   const cell = stagesFor(m);
 
   const xmin = 0.2, xmax = 2e5;
@@ -759,7 +1152,8 @@ function renderRoofline(){
   const X = v => ML + (Math.log10(v) - Math.log10(xmin)) / (Math.log10(xmax) - Math.log10(xmin)) * (W - ML - MR);
   const Y = v => H - MB - (Math.log10(v) - Math.log10(ymin)) / (Math.log10(ymax) - Math.log10(ymin)) * (H - MT - MB);
 
-  const svg = svgEl('svg', {viewBox: `0 0 ${W} ${H}`, class: 'chart'});
+  const svg = svgEl('svg', {viewBox: `0 0 ${W} ${H}`, class: 'chart', role: 'img',
+    'aria-label': `${m.name} 各阶段在 ${dev.name} 屋顶线上的位置`});
 
   // gridlines
   for (let p = Math.floor(Math.log10(ymin)); p <= Math.ceil(Math.log10(ymax)); p++){
@@ -815,7 +1209,8 @@ function renderRoofline(){
   const items = [];
   for (const sid of stageIds){
     const s = cell[sid];
-    if (!s || s.intensity == null || !isFinite(s.intensity)) continue;
+    // 纯访存阶段 (embed, intensity=0) 无法落在对数坐标上, 跳过并保留在明细/整体中
+    if (!s || !(s.intensity > 0) || !isFinite(s.intensity)) continue;
     const perf = Math.min(dev.peak, s.intensity * dev.bw);
     const st = DATA.stages.find(x2 => x2.id === sid);
     items.push({ sid, s, perf, st, px: X(s.intensity), py: Y(perf), ly: Y(perf) });
@@ -844,13 +1239,17 @@ function renderRoofline(){
       svg.appendChild(svgEl('circle', {cx: it.px, cy: it.py, r: 5, fill: STAGE_COLORS[it.sid] || '#333',
         stroke: '#fff', 'stroke-width': 1.5}));
     }
+    // 靠近右边界时标签改为左对齐, 避免跑出绘图区
+    const toLeft = it.px > W - 170;
+    const tx = toLeft ? it.px - 9 : it.px + 9;
+    const anchor = toLeft ? 'end' : 'start';
     // 标签被压开时, 从数据点画一条浅色引导线到标签
     if (Math.abs(it.ly - it.py) > 6){
-      svg.appendChild(svgEl('line', {x1: it.px, y1: it.py, x2: it.px + 7, y2: it.ly,
+      svg.appendChild(svgEl('line', {x1: it.px, y1: it.py, x2: toLeft ? it.px - 7 : it.px + 7, y2: it.ly,
         stroke: '#c4c9d4', 'stroke-width': 0.8}));
     }
     const label = it.isTotal ? '整体' : it.st.name;
-    const t = svgEl('text', {x: it.px + 9, y: it.ly + 3.5, 'font-size': fs,
+    const t = svgEl('text', {x: tx, y: it.ly + 3.5, 'font-size': fs, 'text-anchor': anchor,
       'font-weight': it.isTotal ? 700 : 400, fill: it.isTotal ? '#111827' : '#374151',
       stroke: '#fff', 'stroke-width': 2.5, 'paint-order': 'stroke'});
     t.textContent = label;
@@ -867,7 +1266,9 @@ function renderRoofline(){
   const t_total = cell.total.intensity;
   const model = m ? m.name : '—';
   let html = `<p><b>${esc(model)}</b> 在当前场景 (${esc(state.phase === 'prefill' ? 'prefill S=' + state.prefillS : 'decode B=' + state.decodeB + ', S_kv=' + state.decodeS)}) 下:</p>`;
-  const stagesSorted = stageIds.map(sid => ({sid, v: cell[sid] ? cell[sid].intensity : null})).filter(x => x.v != null && isFinite(x.v));
+  const stagesSorted = stageIds
+    .map(sid => ({ sid, v: cell[sid] ? cell[sid].intensity : null }))
+    .filter(x => x.v != null && isFinite(x.v) && x.v > 0);
   if (stagesSorted.length){
     const hi = stagesSorted.reduce((a, b) => b.v > a.v ? b : a);
     const lo = stagesSorted.reduce((a, b) => b.v < a.v ? b : a);
@@ -885,31 +1286,50 @@ function renderRoofline(){
 // ---------- 渲染: 架构总表 ----------
 function renderArch(){
   const dev = DATA.devices.find(d => d.id === state.deviceId) || DATA.devices[0];
+  const mem = dev.mem || 80e9;
   let html = '<table class="arch"><thead><tr>' +
-    '<th class="rowhead">模型</th><th>家族</th><th>总参数</th><th>激活参数/token</th>' +
-    '<th>层数 L</th><th>hidden h</th><th>注意力 (H/KVH/d)</th><th>FFN</th><th>词表 V</th>' +
-    '<th>权重 BF16</th><th>Decode 每token流量</th>' +
-    `<th>理论 decode 上限 @${esc(dev.name)}</th></tr></thead><tbody>`;
+    '<th class="rowhead" scope="col">模型</th><th scope="col">家族</th><th scope="col">总参数</th>' +
+    '<th scope="col">激活参数/token</th><th scope="col">权重 BF16</th><th scope="col">单卡适配</th>' +
+    `<th scope="col" title="基于 ${esc(dev.name)} 的 HBM 带宽；仅当 BF16 权重可放入单卡时给出">单卡上限</th><th scope="col" title="单 token decode 一步读写的 DRAM 字节数">流量/token</th>` +
+    '<th scope="col">层数 L</th><th scope="col">hidden h</th><th scope="col">注意力</th><th scope="col">FFN</th><th scope="col">词表 V</th>' +
+    '</tr></thead><tbody>';
   for (const m of DATA.models){
     const a = m.arch;
-    const attn = `${a.H}/${a.KVH}` + (a.mla ? ' · MLA' : '') + (a.d ? ` · d=${a.d}` : '');
+    let attn;
+    if (a.mla){
+      attn = `MLA H=${a.H} · q=${fmtDim(a.mla.q_lora)} kv=${fmtDim(a.mla.kv_lora)} rope=${fmtDim(a.mla.rope_d)}`;
+    } else {
+      attn = `${a.H}/${a.KVH} · d=${fmtDim(a.d)}`;
+    }
+    if (a.hybrid) attn += ` · 全注意力 ${a.hybrid.L_full}/${a.L}`;
+    if (a.dsa) attn += ` · DSA topk=${a.dsa.topk}`;
     let ffn;
     if (a.moe){
-      ffn = `MoE E=${a.moe.E}, K=${a.moe.K}, I_e=${a.moe.Ie}` + (a.moe.shared_n ? `, shared=${a.moe.shared_n}` : '');
+      ffn = `MoE E=${a.moe.E}, K=${a.moe.K}, I_e=${a.moe.Ie}` +
+        (a.moe.shared_n ? `, shared=${a.moe.shared_n}` : '');
     } else {
       ffn = `Dense I=${a.I}`;
     }
-    const tps = Math.round(dev.bw / m.stats.bytes_per_token);
-    html += `<tr><td class="rowhead">${esc(m.name)}</td><td>${esc(m.family)}</td>` +
+    const wb = m.stats.weight_bytes || m.stats.total_params * 2;
+    const need = Math.max(1, Math.ceil(wb / (mem * 0.9)));
+    let fit, tps;
+    if (need === 1){
+      fit = `<span class="fit-yes" title="BF16 权重 ${fmtBytes(wb)} ≤ 显存 ${fmtBytes(mem)}×90%">单卡</span>`;
+      tps = `${Math.round(dev.bw / m.stats.bytes_per_token).toLocaleString('en-US')} tok/s`;
+    } else {
+      fit = `<span class="fit-no" title="BF16 权重 ${fmtBytes(wb)}，按 ${fmtBytes(mem)}×90% 可用显存估算">需 ${need} 卡</span>`;
+      tps = `<span class="muted" title="单卡显存不足，未给出单卡 tok/s；多卡理想线性上界需按 TP/EP 与互联带宽另算">—</span>`;
+    }
+    html += `<tr><td class="rowhead">${esc(m.name)}${warnBadge(m)}</td><td>${esc(m.family)}</td>` +
       `<td>${fmtParams(m.stats.total_params)}</td><td>${fmtParams(m.stats.active_params)}</td>` +
-      `<td>${a.L}</td><td>${a.h}</td><td>${esc(attn)}</td><td>${esc(ffn)}</td><td>${a.V.toLocaleString('en-US')}</td>` +
-      `<td>${fmtBytes(m.stats.total_params * 2)}</td>` +
+      `<td>${fmtBytes(wb)}</td><td>${fit}</td><td>${tps}</td>` +
       `<td>${fmtBytes(m.stats.bytes_per_token)}</td>` +
-      `<td>${tps.toLocaleString('en-US')} tok/s</td></tr>`;
+      `<td>${a.L}</td><td>${a.h}</td><td>${esc(attn)}</td><td>${esc(ffn)}</td><td>${a.V ? a.V.toLocaleString('en-US') : '—'}</td></tr>`;
   }
   html += '</tbody></table>';
   $('#arch-table').innerHTML = html;
-  $('#arch-bw').textContent = `${dev.name}: ${fmtFLOPS(dev.peak)} / ${(dev.bw/1e9).toFixed(0)} GB/s, 脊点 ${fmtI(dev.peak/dev.bw)} FLOP/B`;
+  $('#arch-bw').textContent =
+    `${dev.name}: ${fmtFLOPS(dev.peak)} / ${(dev.bw / 1e9).toFixed(0)} GB/s / ${fmtBytes(mem)} 显存, 脊点 ${fmtI(dev.peak / dev.bw)} FLOP/B`;
 }
 
 // ---------- 渲染: 输入区摘要 ----------
@@ -920,27 +1340,88 @@ function renderInputSummary(){
       `<span class="small" style="color:#94a3b8;">一次前向处理 ${state.prefillS.toLocaleString('en-US')} 个 token, 注意力核心 FLOPs ∝ S² (causal ×0.5)</span>`;
   } else {
     el.innerHTML = `当前场景: <b>Decode 解码</b> · 批量 B = <b>${state.decodeB}</b> · KV 缓存长度 = <b>${state.decodeS.toLocaleString('en-US')}</b> tokens<br>` +
-      `<span class="small" style="color:#94a3b8;">每步生成 B 个 token, 每步读 KV 缓存 (${state.decodeS.toLocaleString('en-US')} × KVH × d)</span>`;
+      `<span class="small" style="color:#94a3b8;">每步生成 ${state.decodeB} 个 token，读取上下文 KV（${state.decodeS.toLocaleString('en-US')} tokens；MLA/DSA/混合线性注意力的实际读取量不同）</span>`;
   }
 }
 
 // ---------- 渲染入口 ----------
 function renderAll(){
+  if (!hasData()) return;
   renderInputSummary();
   renderMatrix();
   renderCurves();
   renderRoofline();
   renderArch();
+  writeHash();
 }
 
 // ---------- 初始化 ----------
+function applyPreset(name){
+  const presets = {
+    chat:    { phase: 'decode',  decodeB: 1,  decodeS: 4096 },
+    batch:   { phase: 'decode',  decodeB: 32, decodeS: 4096 },
+    long:    { phase: 'decode',  decodeB: 1,  decodeS: 32768 },
+    prefill: { phase: 'prefill', prefillS: 8192 }
+  };
+  const p = presets[name];
+  if (!p) return;
+  Object.assign(state, p);
+  syncInputUI();
+  syncNumberInputs();
+  renderAll();
+}
+
+function fallbackCopy(text, done){
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    const ok = document.execCommand('copy');
+    if (ok) done();
+    else prompt('复制当前视图链接：', text);
+  } catch (e) {
+    prompt('复制当前视图链接：', text);
+  }
+  ta.remove();
+}
+
+function copyStateLink(){
+  writeHash();
+  const url = location.href;
+  const done = () => toast('已复制当前视图链接');
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(url).then(done).catch(() => fallbackCopy(url, done));
+  } else {
+    fallbackCopy(url, done);
+  }
+}
+
 function init(){
+  if (!hasData()){
+    const main = document.querySelector('main');
+    if (main){
+      main.innerHTML = '<div class="card no-data"><h2>报告数据为空</h2>' +
+        '<p>请先运行 <code>python main.py</code> 生成报告，再用浏览器打开 <code>output/roofline_report.html</code>。</p>' +
+        '<p class="muted small">如果直接打开了 template.html，页面中不会包含任何模型数据。</p></div>';
+    }
+    return;
+  }
+
+  readHash();
+
   // populate model selects
   const modelOpts = DATA.models.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('');
   $('#curves-model').innerHTML = modelOpts;
   $('#roof-model').innerHTML = modelOpts;
-  $('#curves-model').value = state.modelId;
-  $('#roof-model').value = state.modelId;
+  syncModelSelects();
+
+  // family filter
+  const families = Array.from(new Set(DATA.models.map(m => m.family))).sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'));
+  $('#matrix-family').innerHTML = '<option value="">全部家族</option>' +
+    families.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('');
 
   // device selects
   const devOpts = DATA.devices.map(d => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('');
@@ -950,11 +1431,16 @@ function init(){
   $('#arch-device').value = state.deviceId;
 
   // tabs
-  $$('#tabs button').forEach(b => b.onclick = () => {
-    $$('#tabs button').forEach(x => x.classList.remove('active'));
-    b.classList.add('active');
-    $$('.tab').forEach(t => t.classList.remove('active'));
-    $('#tab-' + b.dataset.tab).classList.add('active');
+  $$('#tabs button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+  $('#tabs').addEventListener('keydown', e => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const btns = $$('#tabs button');
+    const i = btns.indexOf(document.activeElement);
+    if (i < 0) return;
+    e.preventDefault();
+    const next = btns[(i + (e.key === 'ArrowRight' ? 1 : -1) + btns.length) % btns.length];
+    next.focus();
+    switchTab(next.dataset.tab);
   });
 
   // ---------- 输入区交互 ----------
@@ -962,6 +1448,7 @@ function init(){
   $$('#phase-seg button').forEach(btn => btn.onclick = () => {
     state.phase = btn.dataset.phase;
     syncInputUI();
+    syncNumberInputs();
     renderAll();
   });
 
@@ -969,9 +1456,7 @@ function init(){
   const bindNum = (id, key, min, max) => {
     const el = $(id);
     const apply = () => {
-      let v = parseInt(el.value, 10);
-      if (isNaN(v)) v = min;
-      v = Math.max(min, Math.min(max, v));
+      const v = clampInt(el.value, min, max, min);
       el.value = v;
       state[key] = v;
       renderAll();
@@ -983,35 +1468,113 @@ function init(){
   bindNum('#decode-b', 'decodeB', 1, 1024);
   bindNum('#decode-s', 'decodeS', 1, 1000000);
 
+  // 快速场景
+  $$('.ip-preset').forEach(btn => btn.onclick = () => applyPreset(btn.dataset.preset));
+
   // 重置
   $('#ip-reset').onclick = () => {
-    state.prefillS = 2048; state.decodeB = 1; state.decodeS = 2048;
-    $('#prefill-s').value = 2048; $('#decode-b').value = 1; $('#decode-s').value = 2048;
+    Object.assign(state, {
+      phase: 'decode', prefillS: 2048, decodeB: 1, decodeS: 2048,
+      matrixQuery: '', matrixFamily: '', matrixSort: 'default'
+    });
+    syncToolbar();
+    syncNumberInputs();
+    syncInputUI();
     renderAll();
+    toast('已恢复默认场景');
   };
 
+  // 复制可分享链接
+  $('#ip-copy').onclick = copyStateLink;
+
   // model changes
-  $('#curves-model').onchange = e => { state.modelId = e.target.value; $('#roof-model').value = e.target.value; renderAll(); };
-  $('#roof-model').onchange = e => { state.modelId = e.target.value; $('#curves-model').value = e.target.value; renderAll(); };
+  $('#curves-model').onchange = e => { state.modelId = e.target.value; syncModelSelects(); renderAll(); };
+  $('#roof-model').onchange = e => { state.modelId = e.target.value; syncModelSelects(); renderAll(); };
 
   // device changes
   $('#roof-device').onchange = e => { state.deviceId = e.target.value; $('#arch-device').value = e.target.value; renderAll(); };
   $('#arch-device').onchange = e => { state.deviceId = e.target.value; $('#roof-device').value = e.target.value; renderAll(); };
 
+  // 矩阵工具栏
+  $('#matrix-search').addEventListener('input', e => {
+    state.matrixQuery = e.target.value;
+    renderMatrix();
+    writeHash();
+  });
+  $('#matrix-family').addEventListener('change', e => {
+    state.matrixFamily = e.target.value;
+    renderMatrix();
+    writeHash();
+  });
+  $('#matrix-sort').addEventListener('change', e => {
+    state.matrixSort = e.target.value;
+    renderMatrix();
+    writeHash();
+  });
+  $('#matrix-export').onclick = exportMatrixCSV;
+
+  // 点击模型行: 选中并联动曲线/Roofline
+  $('#matrix').addEventListener('click', e => {
+    const tr = e.target.closest('tr[data-model-id]');
+    if (!tr) return;
+    state.modelId = tr.dataset.modelId;
+    syncModelSelects();
+    renderAll();
+    const detail = $('#matrix-detail');
+    if (detail){
+      const r = detail.getBoundingClientRect();
+      if (r.top > window.innerHeight - 80 || r.bottom < 80){
+        detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  });
+  $('#matrix-detail').addEventListener('click', e => {
+    const btn = e.target.closest('[data-go]');
+    if (btn) switchTab(btn.dataset.go);
+  });
+
+  // 浏览器前进/后退或手动改 hash
+  window.addEventListener('hashchange', () => {
+    readHash();
+    syncToolbar();
+    syncNumberInputs();
+    syncModelSelects();
+    switchTab(state.tab, false);
+    syncInputUI();
+    renderAll();
+  });
+
   // 生成时间
   $('#gen-time').textContent = DATA.generated || '';
 
+  syncToolbar();
+  syncNumberInputs();
   syncInputUI();
+  switchTab(state.tab, false);
   renderAll();
 }
 
-// 输入区 UI 同步: prefill/decode 显示对应输入
+// 输入区 UI 同步: prefill/decode 显示对应输入; 架构/方法论页隐藏无效场景控件
 function syncInputUI(){
   const isPre = state.phase === 'prefill';
   $('#prefill-inputs').style.display = isPre ? '' : 'none';
   $('#decode-inputs').style.display = isPre ? 'none' : '';
   $('#decode-s-inputs').style.display = isPre ? 'none' : '';
-  $$('#phase-seg button').forEach(btn => btn.classList.toggle('active', btn.dataset.phase === state.phase));
+  $$('#phase-seg button').forEach(btn => {
+    const on = btn.dataset.phase === state.phase;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+
+  const isArch = state.tab === 'arch';
+  $('#input-panel').classList.toggle('hidden', state.tab === 'method');
+  $('#ip-scenario-fields').style.display = isArch ? 'none' : '';
+  $('#ip-presets').style.display = isArch ? 'none' : '';
+  $('#ip-context').style.display = isArch ? '' : 'none';
+  $('#ip-summary').style.display = isArch ? 'none' : '';
+  if (isArch){
+    $('#ip-context').textContent = '架构总表使用固定 decode B=1、S=2048 口径；只有下方 GPU 选择会影响“单卡上限”。';
+  }
 }
 
 document.addEventListener('DOMContentLoaded', init);
