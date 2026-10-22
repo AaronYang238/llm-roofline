@@ -8,6 +8,7 @@
 
 - 52 个模型可**搜索、按家族筛选、按强度/参数量排序**，点击任意模型查看阶段级 FLOPs/访存/占比明细；
 - 支持**快速场景**（单用户解码 / 批量解码 / 长上下文 / 预填充）、**URL 深链分享**与**矩阵 CSV 导出**；
+- Roofline 页支持 **TP / DP / EP / CP / PP / DCP** 并行策略与**卡数**，把全局阶段量切到每卡，并叠加通信量；
 - 架构总表会标注**单卡显存是否放得下**，放不下时不再给出误导性的单卡 tok/s 上界；
 - 对 config 解析中的推断与异常（如 MoE 专家数缺失、MLA 字段不完整）给出**自动校验提示**。
 
@@ -37,7 +38,7 @@ python -m unittest discover -s tests   # 数据归一化 + Python/JS 公式一�
 |---|---|
 | **总览矩阵** | 52 个模型 × 8 个推理阶段的强度热力矩阵；支持搜索/家族筛选/排序，点击行查看阶段明细；可切换 预填充(Prefill)/解码(Decode)、提示词长度 S、批量 B、上下文长度 |
 | **强度曲线** | 选中模型各阶段强度随解码批量 B / 提示词长度 S 的变化曲线（对数坐标，叠加 GPU 脊点参考线） |
-| **Roofline 图** | 选中模型各阶段在所选 GPU（V100/A100/H100/H20/MI308X/B200）屋顶线上的位置：斜线段 = 访存受限，水平段 = 算力受限 |
+| **Roofline 图** | 选中模型各阶段在所选 GPU（V100/A100/H100/H20/MI308X/B200）屋顶线上的位置；支持 TP/DP/EP/CP/PP/DCP 并行策略，显示卡数、每卡通信与单卡基线空心点 |
 | **架构总表** | 各模型架构参数（层数/hidden/头数/FFN/MoE）、总参数量、激活参数量、每 token 流量、单卡显存适配、理论 decode 上限 |
 | **方法论** | 阶段划分、公式、关键假设、数据校验规则与局限性 |
 
@@ -51,7 +52,9 @@ python -m unittest discover -s tests   # 数据归一化 + Python/JS 公式一�
 - **Decode 批量 B**：并行解码的序列数（权重读一次由全批共享，GEMV 强度 ≈ B）；
 - **KV 缓存长度**：解码时逐步累积的上下文长度，决定每步 KV 读量与注意力强度；
 - **快速场景**：一键切换 单用户解码 B=1 / 批量解码 B=32 / 长上下文 32K / 预填充 8K；
-- **复制当前视图链接**：把 tab、阶段、B/S、模型、GPU、搜索/筛选/排序写入 URL，便于分享与复现。
+- **并行部署**（仅 Roofline 页）：策略预设（TP8、TP8+DP8+EP8、TP8+CP4、TP8+PP2）或自定义
+  TP/DP/EP/CP/PP/DCP，实时显示卡数、每卡权重/KV/通信、每卡上限，并可叠加单卡理想空心点；
+- **复制当前视图链接**：把 tab、阶段、B/S、模型、GPU、搜索/筛选/排序、并行策略写入 URL，便于分享与复现。
 
 重算由页面内置的 **JS 公式引擎**完成（与 Python `stages.py` 逐公式一致，
 `tests/test_parity.py` 会用 Node 对全部模型、多组场景做交叉校验），
@@ -93,12 +96,14 @@ roofline/
 │   ├── crawler.py        # ModelScope config.json 爬取器（带缓存）
 │   ├── arch.py           # 各家族 config 归一化（GQA/MLA/MoE/tied 等）
 │   ├── stages.py         # 各推理阶段 FLOPs/Bytes 模型（Python 真值）
+│   ├── parallel.py       # TP/DP/EP/CP/PP/DCP 下的每卡 Roofline 与通信估算
 │   ├── compute.py        # 场景网格 → 强度数据立方
 │   ├── report.py         # HTML 报告渲染
-│   └── template.html     # 报告模板：输入区 + JS 公式引擎（computeStagesJS）
+│   └── template.html     # 报告模板：输入区 + JS 公式引擎（computeStagesJS/computeParallelJS）
 ├── configs_cache/        # 爬取的 config.json 缓存（自动生成）
 ├── tests/
 │   ├── test_arch.py      # 架构归一化 / 专家数 / 参数量 / 注意力公式回归
+│   ├── test_parallel.py  # 并行策略参考规模 + Python/JS 一致性
 │   └── test_parity.py    # Python 与 JS 公式引擎交叉校验（需 Node.js）
 └── output/
     └── roofline_report.html
@@ -121,6 +126,14 @@ roofline/
 - **MoE decode**：每步激活 n_active = min(E, B×K) 个专家，激活专家的权重各读一次。
   每 token 专家数优先读 `num_experts_per_tok` / `num_experts_per_token`，**不会**误用采样参数 `top_k`；
   专家 FFN 维度优先读 `expert_hidden_dim` / `routed_expert_hidden_size`。
+- **并行部署**（Roofline 页，一阶估算）：
+  - 普通 DP：`卡数 = TP × DP × PP`；B 按每副本 batch 计，每卡 Roofline 不变，集群吞吐约 ×DP；
+  - DP-Attention：`卡数 = TP × PP`，`attn_tp = TP / (DP × CP)`；B 为全局 batch，KV 按 DP 切，注意力权重在 DP 间复制；
+  - TP：权重/计算按 TP 切；GQA 的 KV 最多切到 `min(TP, KVH)`，MLA 的 latent KV 不随 TP 切；每层 2 次 all-reduce；
+  - EP：与 MoE-TP 组成 TP（`EP × MoE-TP = TP`），每卡 MoE 权重/FLOPs 仍按 TP 缩放；额外 dispatch+combine all-to-all；
+  - CP：仅 prefill，切 S 并交换 KV；DCP：仅 decode，切 KV 长度并归并部分注意力；
+  - PP：按层切分，embedding/head 只在首末 stage（当前按均值近似）；
+  - 每卡 `ai_total = FLOPs / (DRAM + Comm)`，可在图中开关“通信计入强度”。
 - **共享专家**：显式声明的 `n_shared_experts` / `num_shared_experts` 优先；只有
   `shared_expert_intermediate_size` 时按 1 个共享专家估算。
 - **激活参数**：包含注意力、MLP/激活专家、embedding 与 LM head（untied 时）；tied embedding 不重复计 LM head。
@@ -147,6 +160,9 @@ roofline/
 - 理论 decode 上限 (tok/s) = 带宽 ÷ 每 token 流量，为理想上界，实际通常低 30–60%；
   且仅在 BF16 权重可放入单卡显存时给出，多卡场景需按 TP/EP 与互联带宽另算。
 - 混合线性注意力 (GDN/KDA) 与 DeepSeek-V4 的新式注意力仍按阶段做近似，DSA 的 indexer 开销未单独计入。
+- 并行部署的每卡量是一阶估算：未模拟负载不均、通信重叠、ring/tree 算法差异、PP 气泡与 EP 专家倾斜；
+  TP all-reduce 按逻辑字节计，ring 实际收发约为逻辑量的 `2(TP−1)/TP`。
+- 普通 DP 的 B 按每副本 batch 计；DP-Attention 的 B 按全局 batch 计，比较不同策略时需留意口径差异。
 
 ## 数据来源
 

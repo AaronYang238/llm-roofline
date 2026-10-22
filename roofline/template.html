@@ -156,6 +156,31 @@ a:hover{text-decoration:underline;}
 .detail-warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:8px;padding:8px 12px;margin:8px 0;font-size:12px;}
 .detail-warn ul{margin:4px 0 0 18px;padding:0;}
 .scrollhint{font-size:11px;color:var(--muted);margin:6px 0 0;}
+/* ---------- 并行部署 ---------- */
+.par-panel{padding:14px 18px;}
+.par-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+.par-badge{
+  display:inline-block;background:#eff6ff;color:var(--brand-ink);border:1px solid #bfdbfe;
+  border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;
+}
+.par-controls{gap:10px;align-items:center;margin:8px 0;}
+.par-field{display:inline-flex;align-items:center;gap:5px;}
+.par-field label{font-size:11px;color:var(--muted);white-space:nowrap;}
+.par-controls label{font-size:11px;}
+.par-num{width:58px !important;min-width:58px;text-align:center;cursor:text;}
+.par-toggles{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:8px 0 4px;font-size:12px;color:var(--muted);}
+.par-toggles label{display:inline-flex;align-items:center;gap:5px;cursor:pointer;}
+.par-summary{font-size:12.5px;line-height:1.65;}
+.par-error{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:8px;padding:8px 12px;}
+.par-ok{background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;border-radius:8px;padding:8px 12px;}
+.par-warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:8px;padding:8px 12px;margin-top:6px;}
+.par-stats{display:flex;gap:18px;flex-wrap:wrap;margin:8px 0;}
+.par-stats span{white-space:nowrap;}
+.par-stats b{color:var(--ink);}
+.par-note{color:var(--muted);font-size:11.5px;margin-top:4px;}
+.chartlegend{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:6px 0 0;}
+.chartlegend .dot{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:-1px;margin-right:4px;}
+.chartlegend .hollow{background:#fff;border:2px solid #6b7280;width:8px;height:8px;}
 /* ---------- 快速场景 ---------- */
 .ip-presets{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:12px;}
 .ip-presets .lbl{font-size:11px;color:#94a3b8;margin-right:2px;}
@@ -198,6 +223,14 @@ input:focus-visible,a:focus-visible{outline:2px solid #93c5fd;outline-offset:2px
   #input-panel input.num,#input-panel select{width:100%;}
   .kpi{min-width:120px;}
   .detail-stats{gap:12px;}
+  .par-controls{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;}
+  .par-field{width:100%;justify-content:space-between;}
+  .par-field-wide{grid-column:1 / -1;}
+  .par-field select{width:100%;}
+  .par-num{width:74px !important;min-width:74px;}
+  .par-stats{gap:8px 14px;}
+  .chartwrap{overflow-x:auto;}
+  .chartwrap svg.chart{min-width:720px;}
 }
 </style>
 </head>
@@ -337,7 +370,48 @@ input:focus-visible,a:focus-visible{outline:2px solid #93c5fd;outline-offset:2px
     <label>模型</label><select id="roof-model"></select>
     <label>GPU</label><select id="roof-device"></select>
   </div>
+
+  <div class="card par-panel">
+    <div class="par-head">
+      <div><b>并行部署</b> <span class="muted small">每卡 Roofline = 全局 FLOPs/访存按 TP/PP/DP/EP/CP 切分 + 通信</span></div>
+      <span id="par-cards" class="par-badge">1 卡</span>
+    </div>
+    <div class="controls par-controls">
+      <div class="par-field par-field-wide">
+        <label for="par-preset">策略预设</label>
+        <select id="par-preset" aria-label="并行策略预设">
+          <option value="single">单卡（无并行）</option>
+          <option value="tp8">TP=8（单机 8 卡）</option>
+          <option value="dsv3">TP8 + DP8 + EP8 · DP-Attention</option>
+          <option value="longcp">TP8 + CP4（长文 prefill）</option>
+          <option value="tp8pp2">TP8 + PP2（16 卡）</option>
+          <option value="custom">自定义</option>
+        </select>
+      </div>
+      <div class="par-field"><label for="par-tp">TP</label><input type="number" class="num par-num" id="par-tp" min="1" max="128" step="1" value="1"></div>
+      <div class="par-field"><label for="par-dp">DP</label><input type="number" class="num par-num" id="par-dp" min="1" max="128" step="1" value="1"></div>
+      <div class="par-field"><label for="par-ep">EP</label><input type="number" class="num par-num" id="par-ep" min="1" max="128" step="1" value="1"></div>
+      <div class="par-field"><label for="par-cp">CP</label><input type="number" class="num par-num" id="par-cp" min="1" max="128" step="1" value="1"></div>
+      <div class="par-field"><label for="par-pp">PP</label><input type="number" class="num par-num" id="par-pp" min="1" max="64" step="1" value="1"></div>
+      <div class="par-field"><label for="par-dcp">DCP</label><input type="number" class="num par-num" id="par-dcp" min="1" max="128" step="1" value="1"></div>
+      <div class="par-field par-field-wide">
+        <label for="par-mode">DP 模式</label>
+        <select id="par-mode" aria-label="DP 模式">
+          <option value="replica">普通 DP（副本）</option>
+          <option value="attn">DP-Attention</option>
+        </select>
+      </div>
+    </div>
+    <div class="par-toggles">
+      <label><input type="checkbox" id="par-baseline" checked> 叠加单卡理想点</label>
+      <label><input type="checkbox" id="par-comm" checked> 通信计入强度</label>
+      <span class="muted small">卡数 = TP × DP × PP；DP-Attention 时 = TP × PP</span>
+    </div>
+    <div id="par-summary" class="par-summary" aria-live="polite"></div>
+  </div>
+
   <div class="chartwrap"><div id="roof-chart"></div></div>
+  <p id="roof-legend" class="chartlegend small muted"></p>
   <p class="small muted">嵌入查表为纯访存阶段（FLOPs≈0），无法在对数坐标上表示，因此不绘制；其访存量仍计入“整体”点。
   图中屋顶线为 BF16 稠密算力与 HBM 带宽的理想上界。</p>
   <div id="roof-takeaway" class="card"></div>
@@ -408,6 +482,34 @@ input:focus-visible,a:focus-visible{outline:2px solid #93c5fd;outline-offset:2px
       <li>“理论 decode 上限”仅在 BF16 权重可放入单卡显存时给出；否则显示“需 N 卡”，避免把多卡模型误读为单卡可达性能。</li>
     </ul>
 
+    <h2>并行部署口径（Roofline 页）</h2>
+    <p>Roofline 页的“并行部署”面板把全局阶段量切到<b>每卡</b>，并把通信量作为等效访存计入
+    <code>ai_total = FLOPs / (DRAM + Comm)</code>。这是一阶估算，用于比较策略，不是 kernel 级仿真。</p>
+    <div class="tablewrap">
+      <table class="methodtable">
+        <thead><tr><th>策略</th><th>口径</th></tr></thead>
+        <tbody>
+          <tr><td>卡数</td><td>普通 DP：<code>TP × DP × PP</code>；DP-Attention：<code>TP × PP</code>（DP 从 TP 中除出来）</td></tr>
+          <tr><td>TP</td><td>权重与计算按 TP 切；GQA 的 KV 最多切到 <code>min(TP, KVH)</code>，MLA 的 latent KV 不随 TP 切分；每层 2 次 all-reduce</td></tr>
+          <tr><td>普通 DP</td><td>独立副本；B 按每副本 batch 计，每卡 Roofline 不变，集群吞吐约 ×DP，副本间不计通信</td></tr>
+          <tr><td>DP-Attention</td><td>B 为全局 batch；<code>attn_tp = TP / (DP × CP)</code>；注意力按请求切、KV 按 DP 切，权重在 DP 间复制；每层一次 gather（+ scatter）</td></tr>
+          <tr><td>EP</td><td>与 MoE-TP 共同组成 TP（<code>EP × MoE-TP = TP</code>）；每卡 MoE 权重/FLOPs 仍按 TP 缩放；额外 dispatch + combine all-to-all</td></tr>
+          <tr><td>CP</td><td>仅 prefill 生效；按序列 S 切，每层在 CP 组内交换 KV；decode 自动按 CP=1</td></tr>
+          <tr><td>DCP</td><td>仅 decode 生效；按已缓存 KV 长度切，每层归并部分注意力结果；prefill 自动按 DCP=1</td></tr>
+          <tr><td>PP</td><td>按层切分；embedding 只在首 stage、LM Head 只在末 stage（当前按均值近似）；stage 边界 p2p</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="formula">
+      TP all-reduce（每层 2 次，每卡）≈ M × h × 2B<br>
+      DP-Attention gather（每层）≈ M × h × 2B（SUM_LEN）<br>
+      EP dispatch + combine（每 MoE 层）≈ M_local × K × h × (1B + 2B) × (1 − 1/EP)<br>
+      PP p2p（每个 stage 边界）≈ 2 × M × h × 2B<br>
+      CP KV exchange（每层）≈ S × kv_width × 2B / CP<br>
+      DCP merge（每层）≈ M × H × 2B<br>
+      ai_total = FLOPs / (DRAM + Comm)
+    </div>
+
     <h2>局限性</h2>
     <ul>
       <li>解析模型未覆盖算子融合、kernel 调度、量化 (W8A8/FP8/Int4)、P/D 分离、投机解码等系统优化。</li>
@@ -415,6 +517,8 @@ input:focus-visible,a:focus-visible{outline:2px solid #93c5fd;outline-offset:2px
       <li>元素级/归一化阶段的 FLOPs 与访存为量级估算，非逐算子精确定义。</li>
       <li>理论 decode 上限 (tok/s) = 带宽 ÷ 每 token 流量，为理想上界，实际通常低 30–60%。</li>
       <li>混合线性注意力 (GDN/KDA) 与 DeepSeek-V4 的新式注意力仍按阶段做近似，DSA 的 indexer 开销未单独计入。</li>
+      <li>并行部署的每卡量是一阶估算：未模拟负载不均、通信重叠、ring/tree 算法差异、PP 气泡与 EP 专家倾斜；TP all-reduce 按逻辑字节计。</li>
+      <li>普通 DP 的 B 按每副本 batch 计；DP-Attention 的 B 按全局 batch 计，比较不同策略时请留意这一口径差异。</li>
     </ul>
   </div>
 </section>
@@ -447,9 +551,22 @@ const DEFAULT_STATE = {
   deviceId: 'h100',
   matrixQuery: '',
   matrixFamily: '',
-  matrixSort: 'default'
+  matrixSort: 'default',
+  parPreset: 'single',
+  parTp: 1, parDp: 1, parEp: 1, parCp: 1, parPp: 1, parDcp: 1,
+  parMode: 'replica',
+  parBaseline: true,
+  parComm: true
 };
 const state = Object.assign({}, DEFAULT_STATE);
+
+const PAR_PRESETS = {
+  single: { tp: 1, dp: 1, ep: 1, cp: 1, pp: 1, dcp: 1, mode: 'replica' },
+  tp8:    { tp: 8, dp: 1, ep: 1, cp: 1, pp: 1, dcp: 1, mode: 'replica' },
+  dsv3:   { tp: 8, dp: 8, ep: 8, cp: 1, pp: 1, dcp: 1, mode: 'attn' },
+  longcp: { tp: 8, dp: 1, ep: 1, cp: 4, pp: 1, dcp: 1, mode: 'replica' },
+  tp8pp2: { tp: 8, dp: 1, ep: 1, cp: 1, pp: 2, dcp: 1, mode: 'replica' }
+};
 
 const STAGE_COLORS = {
   embed:   '#94a3b8',
@@ -750,6 +867,165 @@ function stagesFor(m){
   return getStages(m, 'decode', state.decodeB, state.decodeS);
 }
 
+// ============================================================
+// 并行部署: TP / DP / EP / CP / PP / DCP 下的每卡 Roofline
+// 一阶估算; 与 roofline/parallel.py 使用同一组公式
+// ============================================================
+function parCfg(){
+  return {
+    tp: state.parTp, dp: state.parDp, ep: state.parEp,
+    cp: state.parCp, pp: state.parPp, dcp: state.parDcp,
+    mode: state.parMode
+  };
+}
+function parIsSingle(cfg){
+  return cfg.tp === 1 && cfg.dp === 1 && cfg.ep === 1 &&
+    cfg.cp === 1 && cfg.pp === 1 && cfg.dcp === 1;
+}
+function deriveParallel(A, cfg, phase){
+  const tp = Math.max(1, parseInt(cfg.tp, 10) || 1);
+  const dp = Math.max(1, parseInt(cfg.dp, 10) || 1);
+  const ep = Math.max(1, parseInt(cfg.ep, 10) || 1);
+  const pp = Math.max(1, parseInt(cfg.pp, 10) || 1);
+  const cp = phase === 'prefill' ? Math.max(1, parseInt(cfg.cp, 10) || 1) : 1;
+  const dcp = phase === 'decode' ? Math.max(1, parseInt(cfg.dcp, 10) || 1) : 1;
+  const mode = cfg.mode === 'attn' ? 'attn' : 'replica';
+  const attnDp = mode === 'attn' ? dp : 1;
+  const attnTp = mode === 'attn'
+    ? Math.max(1, Math.floor(tp / attnDp / Math.max(1, cp)))
+    : Math.max(1, tp);
+  const world = mode === 'attn' ? tp * pp : tp * dp * pp;
+  const moeTp = Math.max(1, Math.floor(tp / ep));
+  const kvTp = A.mla ? 1 : Math.max(1, Math.min(mode === 'attn' ? attnTp : tp, A.KVH));
+  return { tp, dp, ep, pp, cp, dcp, mode, attnDp, attnTp, world, moeTp, kvTp,
+    layersPerStage: A.L / pp };
+}
+function validateParallel(A, cfg, phase){
+  const d = deriveParallel(A, cfg, phase);
+  const errors = [], warnings = [];
+  if (d.tp > A.H) errors.push(`TP=${d.tp} 超过注意力头数 H=${A.H}`);
+  if (A.L % d.pp !== 0) errors.push(`PP=${d.pp} 必须整除层数 L=${A.L}`);
+  if (d.ep > d.tp || d.tp % d.ep !== 0) errors.push(`EP=${d.ep} 必须满足 1 ≤ EP ≤ TP 且整除 TP=${d.tp}`);
+  if (phase === 'prefill' && d.cp > 1 && d.tp % d.cp !== 0) errors.push(`CP=${d.cp} 必须整除 TP=${d.tp}`);
+  if (phase === 'decode' && d.dcp > 1 && d.tp % d.dcp !== 0) errors.push(`DCP=${d.dcp} 必须整除 TP=${d.tp}`);
+  if (d.mode === 'attn' && d.tp % (d.attnDp * d.cp) !== 0){
+    errors.push(`DP-Attention 要求 TP % (DP×CP) == 0 (TP=${d.tp}, DP=${d.attnDp}, CP=${d.cp})`);
+  }
+  if (d.pp > 1) warnings.push('PP 按层均分；embedding 只在首 stage、LM Head 只在末 stage，当前按均值近似');
+  if (d.mode === 'attn' && d.ep > 1 && A.moe) warnings.push('MoE EP all-to-all 与 MLP TP all-reduce 按保守上界相加');
+  if (d.tp > d.kvTp && !A.mla) warnings.push(`TP=${d.tp} > KV 头数 ${A.KVH}，超出的卡复制 KV cache`);
+  if (d.ep > 1 && !A.moe) warnings.push('模型不是 MoE，EP 不生效');
+  if (d.mode === 'replica' && d.dp > 1) warnings.push('普通 DP 是独立副本：每卡 Roofline 不变，DP 只增加集群吞吐');
+  if (d.mode === 'attn' && d.dp > 1) warnings.push('DP-Attention 下注意力权重在 DP 间复制，每卡权重按总权重 / TP 的一阶下界估算');
+  if (d.tp > 1) warnings.push('TP all-reduce 按逻辑字节计；ring 实际收发约为逻辑量的 2(TP−1)/TP');
+  return { ok: errors.length === 0, message: errors.join('; '), warnings, widths: d };
+}
+function computeParallelJS(A, phase, B, S, cfg, weightBytes){
+  const d = deriveParallel(A, cfg, phase);
+  const v = validateParallel(A, cfg, phase);
+  if (!v.ok){
+    return { valid: false, message: v.message, warnings: v.warnings, widths: d, perGpu: {}, total: {} };
+  }
+  const g = computeStagesJS(A, phase, B, S);
+  const { tp, dp, ep, pp, cp, dcp, mode, attnTp } = d;
+  const L = A.L;
+  const Lp = L / pp;
+  const M = phase === 'prefill' ? B * S : B;
+  const Mdp = mode === 'attn' ? M / dp : M;
+  const Mmlp = M;
+
+  const baseDiv = tp * pp;
+  const qkvDiv = pp * (mode === 'attn' ? attnTp : tp);
+  const kvDiv = A.mla ? 1 : d.kvTp;
+  const attnDiv = pp * (mode === 'attn' ? dp : 1) * kvDiv;
+
+  const stageIds = DATA.stages.map(s => s.id);
+  const comm = {};
+  for (const sid of stageIds) comm[sid] = 0;
+  const moe = A.moe;
+
+  if (tp > 1){
+    const ar = Lp * Mmlp * A.h * AB;
+    if (mode === 'replica' || attnTp > 1) comm.oproj += ar;
+    if (moe && ep > 1) comm.mlp += (moe.first_dense / pp) * Mmlp * A.h * AB;
+    else comm.mlp += ar;
+  }
+  if (mode === 'attn' && dp > 1) comm.mlp += Lp * M * A.h * AB;
+  if (moe && ep > 1){
+    const Lmoe = L - moe.first_dense;
+    const dispatch = (Lmoe / pp) * Mdp * moe.K * A.h * 1.0 * (1 - 1 / ep);
+    comm.mlp += 3 * dispatch;
+  }
+  if (pp > 1) comm.mlp += 2 * (pp - 1) * M * A.h * AB;
+
+  const fullLayers = A.hybrid ? A.hybrid.L_full : L;
+  if (phase === 'prefill' && cp > 1){
+    const kvWidth = A.mla ? (A.mla.kv_lora + A.mla.rope_d) : 2 * A.KVH * A.d;
+    comm.attn += fullLayers * (S * kvWidth * AB / cp);
+  }
+  if (phase === 'decode' && dcp > 1){
+    comm.attn += fullLayers * Mdp * A.H * AB;
+  }
+
+  const perGpu = {};
+  for (const sid of stageIds){
+    const s = g[sid];
+    if (!s) continue;
+    const div = (sid === 'qkv' || sid === 'oproj') ? qkvDiv : (sid === 'attn' ? attnDiv : baseDiv);
+    const flops = s.flops / baseDiv;
+    const dram = s.bytes / Math.max(1e-9, div);
+    const c = comm[sid] || 0;
+    perGpu[sid] = {
+      flops, dram, comm: c,
+      intensity: dram ? flops / dram : 0,
+      intensity_total: (dram + c) ? flops / (dram + c) : 0
+    };
+  }
+  const total = { flops: 0, dram: 0, comm: 0, intensity: 0, intensity_total: 0 };
+  for (const sid in perGpu){
+    total.flops += perGpu[sid].flops;
+    total.dram += perGpu[sid].dram;
+    total.comm += perGpu[sid].comm;
+  }
+  total.intensity = total.dram ? total.flops / total.dram : 0;
+  total.intensity_total = (total.dram + total.comm) ? total.flops / (total.dram + total.comm) : 0;
+  perGpu.total = total;
+
+  const wb = (weightBytes != null) ? weightBytes : 0;
+  const weightPerCard = wb / Math.max(1, tp * pp);
+  let kvPerCard = 0;
+  if (phase === 'decode'){
+    const req = mode === 'attn' ? B / dp : B;
+    const full = A.hybrid ? A.hybrid.L_full : A.L;
+    const perToken = A.mla
+      ? (A.mla.kv_lora + A.mla.rope_d) * KVB * full
+      : A.KVH * A.d * KVB * full;
+    kvPerCard = req * S * perToken / Math.max(1, d.kvTp) / Math.max(1, dcp);
+    if (A.hybrid) kvPerCard += req * A.hybrid.state_elems * KVB * 2 * (A.L - A.hybrid.L_full);
+  }
+  const mem = (cfg && cfg.mem) ? cfg.mem : 80e9;
+  const bw = (cfg && cfg.bw) ? cfg.bw : 3350e9;
+  const fit = weightPerCard <= mem * 0.9;
+  const minCards = Math.max(1, Math.ceil(wb / (mem * 0.9)));
+  const denom = phase === 'decode' ? Math.max(1, B) : Math.max(1, B * S);
+  const commPerToken = total.comm / denom;
+  const bytesPerToken = (total.dram + total.comm) / denom;
+  const warnings = v.warnings.slice();
+  if (!fit) warnings.push(`每卡权重 ${fmtBytes(weightPerCard)} 超过 ${fmtBytes(mem * 0.9)}，当前切分放不下；按总权重至少需要 ${minCards} 张卡`);
+
+  return {
+    valid: true, message: '', warnings, widths: d,
+    perGpu, total,
+    summary: {
+      worldSize: d.world, weightPerCard, kvPerCard, fit, minCards, mem, bw,
+      commPerToken, bytesPerToken,
+      commShare: (total.dram + total.comm) ? total.comm / (total.dram + total.comm) : 0,
+      tokensPerS: bytesPerToken ? bw / bytesPerToken : 0,
+      tp, dp, ep, cp, pp, dcp, mode, attnTp, kvTp: d.kvTp
+    }
+  };
+}
+
 // ---------- 场景 / URL / 标签页 ----------
 const VALID_TABS = ['overview', 'curves', 'roofline', 'arch', 'method'];
 const VALID_SORTS = ['default', 'total-desc', 'total-asc', 'params-desc', 'params-asc', 'name'];
@@ -777,6 +1053,30 @@ function readHash(){
   const fam = p.get('fam') || '';
   const families = Array.from(new Set(DATA.models.map(m => m.family)));
   state.matrixFamily = families.includes(fam) ? fam : '';
+  state.parTp = clampInt(p.get('ptp'), 1, 128, state.parTp);
+  state.parDp = clampInt(p.get('pdp'), 1, 128, state.parDp);
+  state.parEp = clampInt(p.get('pep'), 1, 128, state.parEp);
+  state.parCp = clampInt(p.get('pcp'), 1, 128, state.parCp);
+  state.parPp = clampInt(p.get('ppp'), 1, 64, state.parPp);
+  state.parDcp = clampInt(p.get('pdcp'), 1, 128, state.parDcp);
+  state.parMode = p.get('pmode') === 'attn' ? 'attn' : 'replica';
+  state.parBaseline = p.get('pbase') !== '0';
+  state.parComm = p.get('pcomm') !== '0';
+  const preset = p.get('ppreset');
+  if (['single', 'tp8', 'dsv3', 'longcp', 'tp8pp2', 'custom'].includes(preset)){
+    state.parPreset = preset;
+    const hasPar = ['ptp', 'pdp', 'pep', 'pcp', 'ppp', 'pdcp', 'pmode'].some(k => p.has(k));
+    if (!hasPar && PAR_PRESETS[preset]){
+      const q = PAR_PRESETS[preset];
+      state.parTp = q.tp; state.parDp = q.dp; state.parEp = q.ep;
+      state.parCp = q.cp; state.parPp = q.pp; state.parDcp = q.dcp;
+      state.parMode = q.mode;
+    }
+  } else {
+    const nonSingle = state.parTp > 1 || state.parDp > 1 || state.parEp > 1 ||
+      state.parCp > 1 || state.parPp > 1 || state.parDcp > 1 || state.parMode === 'attn';
+    state.parPreset = nonSingle ? 'custom' : 'single';
+  }
 }
 
 function writeHash(){
@@ -792,6 +1092,16 @@ function writeHash(){
   if (state.matrixSort !== 'default') p.set('sort', state.matrixSort);
   if (state.matrixQuery) p.set('q', state.matrixQuery);
   if (state.matrixFamily) p.set('fam', state.matrixFamily);
+  p.set('ptp', state.parTp);
+  p.set('pdp', state.parDp);
+  p.set('pep', state.parEp);
+  p.set('pcp', state.parCp);
+  p.set('ppp', state.parPp);
+  p.set('pdcp', state.parDcp);
+  if (state.parMode === 'attn') p.set('pmode', 'attn');
+  if (!state.parBaseline) p.set('pbase', '0');
+  if (!state.parComm) p.set('pcomm', '0');
+  if (state.parPreset !== 'single') p.set('ppreset', state.parPreset);
   try {
     history.replaceState(null, '', '#' + p.toString());
   } catch (e) {
@@ -824,6 +1134,36 @@ function syncNumberInputs(){
   $('#prefill-s').value = state.prefillS;
   $('#decode-b').value = state.decodeB;
   $('#decode-s').value = state.decodeS;
+}
+
+function applyParallelPreset(name){
+  if (name === 'custom'){ state.parPreset = 'custom'; return; }
+  const p = PAR_PRESETS[name];
+  if (!p) return;
+  state.parTp = p.tp; state.parDp = p.dp; state.parEp = p.ep;
+  state.parCp = p.cp; state.parPp = p.pp; state.parDcp = p.dcp;
+  state.parMode = p.mode;
+  state.parPreset = name;
+  if (name === 'longcp') state.phase = 'prefill';
+  syncParallelInputs();
+  syncInputUI();
+  syncNumberInputs();
+  renderAll();
+}
+
+function syncParallelInputs(){
+  $('#par-tp').value = state.parTp;
+  $('#par-dp').value = state.parDp;
+  $('#par-ep').value = state.parEp;
+  $('#par-cp').value = state.parCp;
+  $('#par-pp').value = state.parPp;
+  $('#par-dcp').value = state.parDcp;
+  $('#par-mode').value = state.parMode;
+  $('#par-preset').value = state.parPreset;
+  $('#par-baseline').checked = state.parBaseline;
+  $('#par-comm').checked = state.parComm;
+  $('#par-cp').disabled = state.phase !== 'prefill';
+  $('#par-dcp').disabled = state.phase !== 'decode';
 }
 
 function syncModelSelects(){
@@ -1143,17 +1483,27 @@ function renderRoofline(){
   const wrap = $('#roof-chart');
   const m = DATA.models.find(x => x.id === state.modelId);
   const dev = DATA.devices.find(d => d.id === state.deviceId) || DATA.devices[0];
-  if (!m){ wrap.innerHTML = ''; $('#roof-takeaway').innerHTML = ''; return; }
+  if (!m){ wrap.innerHTML = ''; $('#roof-takeaway').innerHTML = ''; $('#par-summary').innerHTML = ''; $('#roof-legend').innerHTML = ''; return; }
   const cell = stagesFor(m);
+  const pcfg = Object.assign(parCfg(), { bw: dev.bw, mem: dev.mem || 80e9 });
+  const par = computeParallelJS(
+    m.arch, state.phase,
+    state.phase === 'prefill' ? 1 : state.decodeB,
+    state.phase === 'prefill' ? state.prefillS : state.decodeS,
+    pcfg, m.stats.weight_bytes || m.stats.total_params * 2
+  );
+  const showPar = par.valid && !parIsSingle(pcfg);
+  const activeCell = showPar ? par.perGpu : cell;
+  const intensityOf = s => showPar ? (state.parComm ? s.intensity_total : s.intensity) : s.intensity;
 
-  const xmin = 0.2, xmax = 2e5;
+  const xmin = 0.02, xmax = 2e5;
   const ymin = 2e10, ymax = 4e15;
   const W = 960, H = 520, ML = 90, MR = 24, MT = 18, MB = 52;
   const X = v => ML + (Math.log10(v) - Math.log10(xmin)) / (Math.log10(xmax) - Math.log10(xmin)) * (W - ML - MR);
   const Y = v => H - MB - (Math.log10(v) - Math.log10(ymin)) / (Math.log10(ymax) - Math.log10(ymin)) * (H - MT - MB);
 
   const svg = svgEl('svg', {viewBox: `0 0 ${W} ${H}`, class: 'chart', role: 'img',
-    'aria-label': `${m.name} 各阶段在 ${dev.name} 屋顶线上的位置`});
+    'aria-label': `${m.name} 各阶段在 ${dev.name} 屋顶线上的位置${showPar ? '（并行后每卡）' : '（单卡理想）'}`});
 
   // gridlines
   for (let p = Math.floor(Math.log10(ymin)); p <= Math.ceil(Math.log10(ymax)); p++){
@@ -1208,18 +1558,20 @@ function renderRoofline(){
   const fs = 10.5, minGap = fs + 4;
   const items = [];
   for (const sid of stageIds){
-    const s = cell[sid];
+    const s = activeCell[sid];
     // 纯访存阶段 (embed, intensity=0) 无法落在对数坐标上, 跳过并保留在明细/整体中
-    if (!s || !(s.intensity > 0) || !isFinite(s.intensity)) continue;
-    const perf = Math.min(dev.peak, s.intensity * dev.bw);
+    const inten = s ? intensityOf(s) : 0;
+    if (!s || !(inten > 0) || !isFinite(inten)) continue;
+    const perf = Math.min(dev.peak, inten * dev.bw);
     const st = DATA.stages.find(x2 => x2.id === sid);
-    items.push({ sid, s, perf, st, px: X(s.intensity), py: Y(perf), ly: Y(perf) });
+    items.push({ sid, s, intensity: inten, perf, st, px: X(inten), py: Y(perf), ly: Y(perf) });
   }
   // 整体点一并纳入防重叠布局 (菱形标记)
-  if (cell.total && cell.total.intensity != null && isFinite(cell.total.intensity)){
-    const perf = Math.min(dev.peak, cell.total.intensity * dev.bw);
-    items.push({ sid: 'total', s: cell.total, perf, st: null,
-      px: X(cell.total.intensity), py: Y(perf), ly: Y(perf), isTotal: true });
+  const totalInten = activeCell.total ? intensityOf(activeCell.total) : 0;
+  if (totalInten != null && isFinite(totalInten) && totalInten > 0){
+    const perf = Math.min(dev.peak, totalInten * dev.bw);
+    items.push({ sid: 'total', s: activeCell.total, intensity: totalInten, perf, st: null,
+      px: X(totalInten), py: Y(perf), ly: Y(perf), isTotal: true });
   }
   items.sort((a, b) => a.ly - b.ly);
   for (let i = 1; i < items.length; i++){
@@ -1231,6 +1583,23 @@ function renderRoofline(){
     if (items[i].ly > yMax) items[i].ly = yMax;
     if (items[i-1].ly > items[i].ly - minGap) items[i-1].ly = items[i].ly - minGap;
   }
+  // 单卡理想基线: 空心点, 不参与标签防重叠
+  if (showPar && state.parBaseline){
+    for (const sid of stageIds){
+      const b = cell[sid];
+      if (!b || !(b.intensity > 0) || !isFinite(b.intensity)) continue;
+      const perf = Math.min(dev.peak, b.intensity * dev.bw);
+      const c = svgEl('circle', {
+        cx: X(b.intensity), cy: Y(perf), r: 4,
+        fill: '#ffffff', stroke: STAGE_COLORS[sid] || '#333', 'stroke-width': 1.5
+      });
+      const title = svgEl('title', {});
+      title.textContent = `单卡理想 ${DATA.stages.find(x => x.id === sid).name}: ${fmtI(b.intensity)} FLOP/B`;
+      c.appendChild(title);
+      svg.appendChild(c);
+    }
+  }
+
   for (const it of items){
     if (it.isTotal){
       const d = `M ${it.px} ${it.py-6} L ${it.px+6} ${it.py} L ${it.px} ${it.py+6} L ${it.px-6} ${it.py} Z`;
@@ -1254,20 +1623,28 @@ function renderRoofline(){
       stroke: '#fff', 'stroke-width': 2.5, 'paint-order': 'stroke'});
     t.textContent = label;
     const title = svgEl('title', {});
-    title.textContent = `${label}: 强度 ${fmtI(it.s.intensity)} FLOP/B, 可达 ${fmtFLOPS(it.perf)}`;
+    title.textContent = `${label}: 强度 ${fmtI(it.intensity)} FLOP/B, 可达 ${fmtFLOPS(it.perf)}`;
     svg.appendChild(t);
     svg.lastChild.appendChild(title);
   }
 
   wrap.innerHTML = '';
   wrap.appendChild(svg);
+  const legendEl = $('#roof-legend');
+  if (legendEl){
+    legendEl.innerHTML = showPar
+      ? `<span><span class="dot" style="background:#111827"></span>并行后每卡（${state.parComm ? '含通信' : '仅 DRAM'}）</span>` +
+        (state.parBaseline ? `<span><span class="dot hollow"></span>单卡理想</span>` : '') +
+        `<span>卡数 ${par.summary.worldSize} · ${esc(par.summary.mode === 'attn' ? 'DP-Attention' : '普通 DP')}</span>`
+      : `<span><span class="dot" style="background:#111827"></span>单卡理想（未应用并行切分）</span>`;
+  }
 
   // takeaway
-  const t_total = cell.total.intensity;
+  const t_total = activeCell.total ? intensityOf(activeCell.total) : null;
   const model = m ? m.name : '—';
-  let html = `<p><b>${esc(model)}</b> 在当前场景 (${esc(state.phase === 'prefill' ? 'prefill S=' + state.prefillS : 'decode B=' + state.decodeB + ', S_kv=' + state.decodeS)}) 下:</p>`;
+  let html = `<p><b>${esc(model)}</b> 在当前场景 (${esc(state.phase === 'prefill' ? 'prefill S=' + state.prefillS : 'decode B=' + state.decodeB + ', S_kv=' + state.decodeS)}) 下${showPar ? '（并行后每卡）' : '（单卡理想）'}:</p>`;
   const stagesSorted = stageIds
-    .map(sid => ({ sid, v: cell[sid] ? cell[sid].intensity : null }))
+    .map(sid => ({ sid, v: activeCell[sid] ? intensityOf(activeCell[sid]) : null }))
     .filter(x => x.v != null && isFinite(x.v) && x.v > 0);
   if (stagesSorted.length){
     const hi = stagesSorted.reduce((a, b) => b.v > a.v ? b : a);
@@ -1280,7 +1657,65 @@ function renderRoofline(){
     const mb = t_total < ridge;
     html += `<p>整体强度 <b>${fmtI(t_total)} FLOP/B</b>, ${mb ? '<b>低于</b>' : '<b>高于</b>'} ${esc(dev.name)} 脊点 (${fmtI(ridge)} FLOP/B), 当前阶段${mb ? '受限于显存带宽 (memory-bound)' : '受限于峰值算力 (compute-bound)'}。</p>`;
   }
+  if (showPar){
+    const s = par.summary;
+    const pct = s.commShare * 100;
+    const commTxt = pct > 0 && pct < 0.1 ? '<0.1%' : pct.toFixed(1) + '%';
+    html += `<p class="small muted">策略 ${esc(`TP${s.tp} · DP${s.dp}(${s.mode === 'attn' ? 'DP-Attention' : '副本'}) · EP${s.ep} · CP${s.cp} · PP${s.pp} · DCP${s.dcp}`)}，
+      通信占每卡等效访存 <b>${commTxt}</b>${state.parComm ? '' : '（当前未计入强度）'}。</p>`;
+  }
   $('#roof-takeaway').innerHTML = html;
+  renderParallelSummary(m, dev, par, showPar);
+}
+
+function renderParallelSummary(m, dev, par, showPar){
+  const el = $('#par-summary');
+  const cardsEl = $('#par-cards');
+  if (!el || !cardsEl) return;
+  if (!par.valid){
+    cardsEl.textContent = '— 卡';
+    el.innerHTML = `<div class="par-error"><b>并行配置不合法</b>：${esc(par.message)}</div>`;
+    return;
+  }
+  const s = par.summary;
+  cardsEl.textContent = `${s.worldSize} 卡`;
+  const perToken = state.parComm ? s.bytesPerToken : Math.max(0, s.bytesPerToken - s.commPerToken);
+  const tokensPerS = perToken ? dev.bw / perToken : 0;
+  const commPct = s.commShare * 100;
+  const commLabel = commPct > 0 && commPct < 0.1 ? '<0.1%' : commPct.toFixed(1) + '%';
+  let html = `<div class="par-stats">
+    <span>卡数 <b>${s.worldSize}</b></span>
+    <span>每卡权重 <b>${fmtBytes(s.weightPerCard)}</b></span>
+    <span>每卡 KV <b>${state.phase === 'decode' ? fmtBytes(s.kvPerCard) : '—'}</b></span>
+    <span>每 token 流量/卡 <b>${fmtBytes(perToken)}</b></span>
+    <span>通信/卡 <b>${fmtBytes(s.commPerToken)}</b>/token</span>
+    <span>每卡上限 <b>${tokensPerS && isFinite(tokensPerS) ? Math.round(tokensPerS).toLocaleString('en-US') : '—'}</b> tok/s</span>
+    <span>集群估算 <b>${tokensPerS && isFinite(tokensPerS) ? Math.round(tokensPerS * s.dp).toLocaleString('en-US') : '—'}</b> tok/s（×DP）</span>
+  </div>`;
+  if (!showPar){
+    html += `<p class="par-note">当前为单卡模式。选择策略预设或修改 TP/DP/EP/CP/PP，图表会切换为每卡 Roofline，并叠加单卡理想空心点。</p>`;
+  } else {
+    html += `<div class="${s.fit ? 'par-ok' : 'par-warn'}">` +
+      (s.fit
+        ? `✓ 当前切分每卡权重 ${fmtBytes(s.weightPerCard)} 可放入 ${esc(dev.name)} 的 ${fmtBytes(s.mem * 0.9)} 可用显存（仅权重口径）。`
+        : `✗ 当前切分每卡权重 ${fmtBytes(s.weightPerCard)} 超过 ${esc(dev.name)} 的 ${fmtBytes(s.mem * 0.9)} 可用显存；按总权重至少需要 ${s.minCards} 张卡。`) +
+      `</div>`;
+    html += `<p class="par-note">每卡通信占等效访存 <b>${commLabel}</b>；` +
+      (state.parComm ? '当前强度已把通信计入分母。' : '当前强度只看 DRAM，未把通信计入分母。') + `</p>`;
+    if (s.mode === 'replica' && s.dp > 1)
+      html += `<p class="par-note">普通 DP 的 B 按每副本 batch 计：每卡 Roofline 不变，集群吞吐约 ×${s.dp}。</p>`;
+    if (s.mode === 'attn')
+      html += `<p class="par-note">DP-Attention：B 是全局 batch；注意力按请求切、KV 按 DP 切，权重在 DP 间复制。</p>`;
+    if (state.phase === 'decode' && state.parCp > 1)
+      html += `<p class="par-note">CP 仅 prefill 生效；当前 decode 按 CP=1 计算。</p>`;
+    if (state.phase === 'prefill' && state.parDcp > 1)
+      html += `<p class="par-note">DCP 仅 decode 生效；当前 prefill 按 DCP=1 计算。</p>`;
+  }
+  if (par.warnings && par.warnings.length){
+    html += `<div class="par-warn"><b>并行估算提示</b><ul style="margin:4px 0 0 18px;padding:0;">` +
+      par.warnings.map(w => `<li>${esc(w)}</li>`).join('') + `</ul></div>`;
+  }
+  el.innerHTML = html;
 }
 
 // ---------- 渲染: 架构总表 ----------
@@ -1475,10 +1910,13 @@ function init(){
   $('#ip-reset').onclick = () => {
     Object.assign(state, {
       phase: 'decode', prefillS: 2048, decodeB: 1, decodeS: 2048,
-      matrixQuery: '', matrixFamily: '', matrixSort: 'default'
+      matrixQuery: '', matrixFamily: '', matrixSort: 'default',
+      parPreset: 'single', parTp: 1, parDp: 1, parEp: 1, parCp: 1, parPp: 1, parDcp: 1,
+      parMode: 'replica', parBaseline: true, parComm: true
     });
     syncToolbar();
     syncNumberInputs();
+    syncParallelInputs();
     syncInputUI();
     renderAll();
     toast('已恢复默认场景');
@@ -1494,6 +1932,34 @@ function init(){
   // device changes
   $('#roof-device').onchange = e => { state.deviceId = e.target.value; $('#arch-device').value = e.target.value; renderAll(); };
   $('#arch-device').onchange = e => { state.deviceId = e.target.value; $('#roof-device').value = e.target.value; renderAll(); };
+
+  // 并行部署
+  $('#par-preset').onchange = e => applyParallelPreset(e.target.value);
+  const parKeys = [
+    ['#par-tp', 'parTp', 1, 128], ['#par-dp', 'parDp', 1, 128],
+    ['#par-ep', 'parEp', 1, 128], ['#par-cp', 'parCp', 1, 128],
+    ['#par-pp', 'parPp', 1, 64], ['#par-dcp', 'parDcp', 1, 128]
+  ];
+  for (const [sel, key, min, max] of parKeys){
+    const el = $(sel);
+    const apply = () => {
+      state[key] = clampInt(el.value, min, max, min);
+      el.value = state[key];
+      state.parPreset = 'custom';
+      $('#par-preset').value = 'custom';
+      renderAll();
+    };
+    el.addEventListener('change', apply);
+    el.addEventListener('keydown', e => { if (e.key === 'Enter') apply(); });
+  }
+  $('#par-mode').onchange = e => {
+    state.parMode = e.target.value;
+    state.parPreset = 'custom';
+    syncParallelInputs();
+    renderAll();
+  };
+  $('#par-baseline').onchange = e => { state.parBaseline = e.target.checked; renderAll(); };
+  $('#par-comm').onchange = e => { state.parComm = e.target.checked; renderAll(); };
 
   // 矩阵工具栏
   $('#matrix-search').addEventListener('input', e => {
@@ -1539,6 +2005,7 @@ function init(){
     syncToolbar();
     syncNumberInputs();
     syncModelSelects();
+    syncParallelInputs();
     switchTab(state.tab, false);
     syncInputUI();
     renderAll();
@@ -1549,6 +2016,7 @@ function init(){
 
   syncToolbar();
   syncNumberInputs();
+  syncParallelInputs();
   syncInputUI();
   switchTab(state.tab, false);
   renderAll();
@@ -1575,6 +2043,7 @@ function syncInputUI(){
   if (isArch){
     $('#ip-context').textContent = '架构总表使用固定 decode B=1、S=2048 口径；只有下方 GPU 选择会影响“单卡上限”。';
   }
+  syncParallelInputs();
 }
 
 document.addEventListener('DOMContentLoaded', init);
